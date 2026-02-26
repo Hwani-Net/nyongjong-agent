@@ -2,7 +2,7 @@
 
 > AI-native 자율 에이전트 서버 — MCP 프로토콜, Obsidian 메모리, 멀티 모델, 페르소나 시스템
 
-![Tests](https://img.shields.io/badge/tests-138%2F138-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-core_95%25+-blue) ![v0.4.0-rc1](https://img.shields.io/badge/version-0.4.0--rc1-orange)
+![Tests](https://img.shields.io/badge/tests-169%2F169-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-core_95%25+-blue) ![v0.4.0](https://img.shields.io/badge/version-0.4.0-green)
 
 ## Quick Start
 
@@ -13,7 +13,7 @@ cp .env.example .env    # 경로 설정
 npm start               # MCP 서버 (Antigravity 자동 연결)
 npm run dashboard       # 대시보드 → http://localhost:3100
 npm run test:mcp        # MCP 연결 검증
-npm test                # 유닛 테스트 (149/149)
+npm test                # 유닛 테스트 (169/169)
 npm run test:coverage   # 커버리지 리포트
 ```
 
@@ -21,7 +21,7 @@ npm run test:coverage   # 커버리지 리포트
 
 ```
 ┌─────────────┐    MCP stdio    ┌──────────────────┐
-│ Antigravity  │◄──────────────►│  MCP Server (13)  │
+│ Antigravity  │◄──────────────►│  MCP Server (15)  │
 │ (VS Code)    │                │                    │
 └─────────────┘                └────────┬───────────┘
                                         │
@@ -77,8 +77,10 @@ npm run test:coverage   # 커버리지 리포트
 
 ### Features
 
-- 🌗 라이트/다크 테마 토글
-- 📡 SSE 5초 주기 실시간 업데이트
+- 🌗 라이트/다크 테마 토글 (QA 검증 완료)
+- 📡 SSE 실시간 + 자동 재연결 (5회) + 폴링 폴백
+- 🔄 즉시 fetch 초기 데이터 로딩 (SSE 독립)
+- 💬 Chat 한글 입력/응답 (도움, 상태, 분석 등)
 - 🎨 글래시 디자인 + CSS 애니메이션
 - 📱 반응형 쉘 레이아웃 (260px 사이드바)
 
@@ -99,6 +101,8 @@ npm run test:coverage   # 커버리지 리포트
 | `ollama_health` | Ollama 상태 + 모델 목록 |
 | `ground_check` | 팩트 검증 (통계/법률/가격) |
 | `run_cycle` | AI 순환 워크플로우 실행 |
+| `tool_toggle` | 도구 활성/비활성 토글 |
+| `tool_status` | 도구 상태 조회 |
 
 ## Personas (6)
 
@@ -124,7 +128,7 @@ Understand → Prototype → Validate ↔ Evolve → Report
 ```
 src/
 ├── index.ts              # MCP entry point
-├── mcp-server.ts         # 13 MCP tools
+├── mcp-server.ts         # 15 MCP tools
 ├── agent.ts              # Module orchestrator
 ├── dashboard-main.ts     # Dashboard entry point
 ├── core/
@@ -157,7 +161,7 @@ src/
     └── logger.ts         # Structured logging
 
 data/personas/            # Default persona definitions (6)
-tests/                    # 138 unit tests (13 files)
+tests/                    # 169 unit tests (17 files)
 scripts/test-mcp.ts       # MCP connection verifier
 ```
 
