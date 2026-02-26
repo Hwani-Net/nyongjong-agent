@@ -6,8 +6,8 @@ const log = createLogger('gap-detector');
 export interface FactualClaim {
   /** The text containing the claim */
   text: string;
-  /** Type of claim */
-  type: 'statistic' | 'date' | 'name' | 'regulation' | 'price' | 'general';
+  /** Type of claim — matches design doc Section 6.1 */
+  type: 'statistic' | 'date' | 'name' | 'regulation' | 'price' | 'trend' | 'user_behavior' | 'competitor' | 'general';
   /** Confidence that this needs grounding (0-1) */
   groundingNeed: number;
   /** Suggested data source */
@@ -106,7 +106,65 @@ export function detectGaps(text: string): GapAnalysis {
         text: match[0],
         type: 'price',
         groundingNeed: 0.85,
-        suggestedSource: 'data.go.kr/공공데이터',
+        suggestedSource: '네이버쇼핑/쿠팡',
+      });
+    }
+  }
+
+  // Check for trends (design doc Section 6.1: "트렌드가...")
+  const TREND_PATTERNS = [
+    /트렌드[가는이].{0,30}/g,
+    /검색량[이가].{0,30}/g,
+    /인기[가는이].{0,20}(증가|감소|상승|하락)/g,
+    /최근\s+\d+년간?.{0,30}(성장|증가|감소)/g,
+  ];
+  for (const pattern of TREND_PATTERNS) {
+    const matches = text.matchAll(new RegExp(pattern.source, pattern.flags));
+    for (const match of matches) {
+      claims.push({
+        text: match[0],
+        type: 'trend',
+        groundingNeed: 0.8,
+        suggestedSource: 'Google Trends/Naver DataLab',
+      });
+    }
+  }
+
+  // Check for user behavior claims (design doc Section 6.1: "사용자들은 보통...")
+  const USER_BEHAVIOR_PATTERNS = [
+    /사용자[들은는이가].{0,20}(보통|대부분|주로|평균)/g,
+    /이용자[들은는이가].{0,30}/g,
+    /다운로드.{0,10}\d+[\s]*(만|천|백만)/g,
+    /DAU|MAU|활성\s*사용자.{0,20}\d+/g,
+    /리뷰[가에서].{0,20}(평점|별점|점)/g,
+  ];
+  for (const pattern of USER_BEHAVIOR_PATTERNS) {
+    const matches = text.matchAll(new RegExp(pattern.source, pattern.flags));
+    for (const match of matches) {
+      claims.push({
+        text: match[0],
+        type: 'user_behavior',
+        groundingNeed: 0.75,
+        suggestedSource: '앱스토어 리뷰/Reddit',
+      });
+    }
+  }
+
+  // Check for competitor claims (design doc Section 6.1: "경쟁사는...")
+  const COMPETITOR_PATTERNS = [
+    /경쟁사[는가].{0,30}/g,
+    /경쟁\s*제품[은는이가].{0,30}/g,
+    /시장\s*점유율.{0,20}\d+%/g,
+    /대안[으로은는].{0,30}/g,
+  ];
+  for (const pattern of COMPETITOR_PATTERNS) {
+    const matches = text.matchAll(new RegExp(pattern.source, pattern.flags));
+    for (const match of matches) {
+      claims.push({
+        text: match[0],
+        type: 'competitor',
+        groundingNeed: 0.7,
+        suggestedSource: '웹 검색/크롤링',
       });
     }
   }

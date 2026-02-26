@@ -1,8 +1,8 @@
 {
   "servers": {
-    "naedon-agent": {
-      "command": "npx",
-      "args": ["tsx", "src/index.ts"],
+    "nongjong-agent": {
+      "command": "node",
+      "args": ["dist/src/index.js"],
       "cwd": "e:/Agent/뇽죵이Agent",
       "env": {
         "OBSIDIAN_VAULT_PATH": "e:/Agent/뇽죵이Agent/data",

@@ -1,4 +1,5 @@
 // Entry point — initializes config and starts the MCP server
+import './pre-init.js';
 import { loadConfig } from './core/config.js';
 import { setLogLevel } from './utils/logger.js';
 import { createLogger } from './utils/logger.js';

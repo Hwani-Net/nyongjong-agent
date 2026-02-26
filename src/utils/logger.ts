@@ -40,9 +40,9 @@ export function createLogger(module: string) {
     const prefix = `${DIM}${timestamp}${RESET} ${color}[${level.toUpperCase().padEnd(5)}]${RESET} ${DIM}(${module})${RESET}`;
 
     if (data !== undefined) {
-      console.log(`${prefix} ${message}`, typeof data === 'string' ? data : JSON.stringify(data, null, 2));
+      console.error(`${prefix} ${message}`, typeof data === 'string' ? data : JSON.stringify(data, null, 2));
     } else {
-      console.log(`${prefix} ${message}`);
+      console.error(`${prefix} ${message}`);
     }
   }
 

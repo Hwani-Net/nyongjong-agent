@@ -1,5 +1,5 @@
 // Task manager — manages agent tasks via Obsidian Vault markdown files
-import { ObsidianStore, type NoteData } from './obsidian-store.js';
+import { ObsidianStore } from './obsidian-store.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('task-manager');
@@ -26,18 +26,21 @@ export interface TaskManagerOptions {
 /**
  * Manages agent tasks stored as Obsidian markdown notes.
  *
- * Directory structure:
+ * Design doc Section 3 — Obsidian Vault 구조:
  *   {agentDataDir}/tasks/queue.md      — YAML frontmatter with task list
- *   {agentDataDir}/tasks/active.md     — Currently active task
+ *   {agentDataDir}/tasks/active.md     — Currently active task (separate file)
  *   {agentDataDir}/tasks/archive/      — Completed/failed tasks
+ *   {agentDataDir}/sessions/           — Session logs
  */
 export class TaskManager {
   private store: ObsidianStore;
   private tasksDir: string;
+  private sessionsDir: string;
 
   constructor(options: TaskManagerOptions) {
     this.store = options.store;
     this.tasksDir = `${options.agentDataDir}/tasks`;
+    this.sessionsDir = `${options.agentDataDir}/sessions`;
     log.info('TaskManager initialized', { tasksDir: this.tasksDir });
   }
 
@@ -81,6 +84,7 @@ export class TaskManager {
 
   /**
    * Update the status of a task in the queue.
+   * When status changes to 'active', also writes to active.md.
    */
   async updateTask(id: string, updates: Partial<Pick<AgentTask, 'status' | 'title' | 'description' | 'priority'>>): Promise<AgentTask | null> {
     const queue = await this.getQueue();
@@ -98,6 +102,15 @@ export class TaskManager {
     };
 
     await this.saveQueue(queue);
+
+    // Design doc Section 3: active.md is a separate file
+    if (updates.status === 'active') {
+      await this.writeActiveTask(queue[index]);
+    } else if (updates.status && updates.status !== ('active' as TaskStatus)) {
+      // Clear active.md if task is no longer active
+      await this.clearActiveTask();
+    }
+
     log.info(`Task updated: ${id}`, updates);
     return queue[index];
   }
@@ -120,6 +133,11 @@ export class TaskManager {
     // Save remaining queue
     await this.saveQueue(queue);
 
+    // Clear active.md if this was the active task
+    if (task.status === 'active') {
+      await this.clearActiveTask();
+    }
+
     // Write archive note
     const archivePath = `${this.tasksDir}/archive/${task.id}.md`;
     await this.store.writeNote(
@@ -136,11 +154,76 @@ export class TaskManager {
   }
 
   /**
-   * Get the currently active task (if any).
+   * Get the currently active task from active.md (design doc Section 3).
    */
   async getActiveTask(): Promise<AgentTask | null> {
-    const queue = await this.getQueue();
-    return queue.find((t) => t.status === 'active') || null;
+    const activePath = `${this.tasksDir}/active.md`;
+
+    if (!(await this.store.exists(activePath))) {
+      return null;
+    }
+
+    try {
+      const note = await this.store.readNote(activePath);
+      const task = note.frontmatter as unknown as AgentTask;
+      return task && task.id ? task : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Write the active task to active.md (design doc Section 3).
+   */
+  private async writeActiveTask(task: AgentTask): Promise<void> {
+    const activePath = `${this.tasksDir}/active.md`;
+    await this.store.writeNote(
+      activePath,
+      `# 현재 진행 중: ${task.title}\n\n${task.description}`,
+      { ...task },
+    );
+    log.info(`Active task written: ${task.id}`);
+  }
+
+  /**
+   * Clear active.md when no task is active.
+   */
+  private async clearActiveTask(): Promise<void> {
+    const activePath = `${this.tasksDir}/active.md`;
+    await this.store.writeNote(
+      activePath,
+      '_No active task._',
+      { status: 'idle' },
+    );
+  }
+
+  /**
+   * Log a session entry (design doc Section 3: sessions/ directory).
+   */
+  async logSession(entry: string): Promise<void> {
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const sessionPath = `${this.sessionsDir}/${today}.md`;
+    const timestamp = new Date().toLocaleTimeString('ko-KR');
+
+    let existing = '';
+    if (await this.store.exists(sessionPath)) {
+      const note = await this.store.readNote(sessionPath);
+      existing = note.content;
+    }
+
+    const newEntry = `${existing}\n\n## ${timestamp}\n\n${entry}`.trim();
+
+    await this.store.writeNote(
+      sessionPath,
+      newEntry,
+      {
+        date: today,
+        type: 'session-log',
+        updatedAt: new Date().toISOString(),
+      },
+    );
+
+    log.debug(`Session logged: ${sessionPath}`);
   }
 
   /**

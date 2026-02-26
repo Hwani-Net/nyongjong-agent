@@ -108,7 +108,7 @@ export function generateReport(input: ReportInput): Report {
   if (personaResults && personaResults.length > 0) {
     sections.push('## 🎭 페르소나 자문');
     personaResults.forEach((result) => {
-      sections.push(`### ${result.personaName} (${result.model})`);
+      sections.push(`### ${result.persona} (${result.model})`);
       sections.push(result.response.slice(0, 300));
       sections.push('');
     });

@@ -1,9 +1,23 @@
-// Grounding engine — orchestrates gap detection and fact verification
+// Grounding engine — orchestrates gap detection, adapter routing, and fact verification
 import { createLogger } from '../utils/logger.js';
 import { detectGaps, type GapAnalysis, type FactualClaim } from './gap-detector.js';
-import { ApiConnector, type ApiResult } from './api-connector.js';
+import { KosisAdapter } from './adapters/kosis.js';
+import { NaverSearchAdapter } from './adapters/naver-search.js';
+import { GoogleTrendsAdapter } from './adapters/google-trends.js';
+import { LawKrAdapter } from './adapters/law-kr.js';
+import { AppReviewsAdapter } from './adapters/app-reviews.js';
+import { WebScraperAdapter } from './adapters/web-scraper.js';
 
 const log = createLogger('grounding-engine');
+
+export interface ApiResult {
+  source: string;
+  query: string;
+  success: boolean;
+  data: string;
+  durationMs: number;
+  error?: string;
+}
 
 export interface GroundingResult {
   /** Original gap analysis */
@@ -25,22 +39,52 @@ export interface ClaimVerification {
 }
 
 export interface GroundingEngineOptions {
-  /** API connector instance */
-  apiConnector: ApiConnector;
   /** Minimum grounding need score to trigger verification (0-1) */
   minGroundingThreshold?: number;
-  /** Max concurrent API calls */
-  maxConcurrent?: number;
 }
 
+/**
+ * Grounding Engine — design doc Section 6.
+ *
+ * Orchestrates:
+ *   1. Gap detection (gap-detector.ts)
+ *   2. Adapter routing (adapters/*.ts)
+ *   3. API calls for fact verification
+ *
+ * Each claim type routes to the appropriate adapter:
+ *   - statistic → KOSIS
+ *   - price → Naver Shopping
+ *   - regulation → law.go.kr
+ *   - trend → Google Trends
+ *   - user_behavior → App Reviews
+ *   - competitor → Web Scraper + Naver
+ *   - general → Web Scraper fallback
+ */
 export class GroundingEngine {
-  private apiConnector: ApiConnector;
   private minThreshold: number;
 
-  constructor(options: GroundingEngineOptions) {
-    this.apiConnector = options.apiConnector;
+  // Adapters (design doc Section 7: grounding/adapters/)
+  private kosis: KosisAdapter;
+  private naver: NaverSearchAdapter;
+  private googleTrends: GoogleTrendsAdapter;
+  private lawKr: LawKrAdapter;
+  private appReviews: AppReviewsAdapter;
+  private webScraper: WebScraperAdapter;
+
+  constructor(options: GroundingEngineOptions = {}) {
     this.minThreshold = options.minGroundingThreshold || 0.7;
-    log.info('GroundingEngine initialized', { threshold: this.minThreshold });
+
+    // Initialize all adapters
+    this.kosis = new KosisAdapter();
+    this.naver = new NaverSearchAdapter();
+    this.googleTrends = new GoogleTrendsAdapter();
+    this.lawKr = new LawKrAdapter();
+    this.appReviews = new AppReviewsAdapter();
+    this.webScraper = new WebScraperAdapter();
+
+    log.info('GroundingEngine initialized with 6 adapters', {
+      threshold: this.minThreshold,
+    });
   }
 
   /**
@@ -65,11 +109,11 @@ export class GroundingEngine {
     const toVerify = analysis.claims.filter((c) => c.groundingNeed >= this.minThreshold);
     log.info(`${toVerify.length}/${analysis.claims.length} claims above threshold`);
 
-    // Step 3: Verify each claim (sequentially to respect API rate limits)
+    // Step 3: Route each claim to appropriate adapter and verify
     const verifications: ClaimVerification[] = [];
 
     for (const claim of toVerify) {
-      const apiResult = await this.apiConnector.groundClaim(claim.text, claim.suggestedSource);
+      const apiResult = await this.routeToAdapter(claim);
       verifications.push({
         claim,
         apiResult,
@@ -96,5 +140,71 @@ export class GroundingEngine {
    */
   quickCheck(text: string): GapAnalysis {
     return detectGaps(text);
+  }
+
+  /**
+   * Route a claim to the appropriate adapter based on type and suggested source.
+   *
+   * Design doc Section 6.1 — adapter routing table:
+   *   정량 추측 → KOSIS
+   *   가격 추측 → 네이버쇼핑
+   *   규제 → 법령정보
+   *   트렌드 → Google Trends
+   *   사용자 행동 → 앱스토어 리뷰
+   *   경쟁사 → 웹 검색
+   */
+  private async routeToAdapter(claim: FactualClaim): Promise<ApiResult> {
+    log.info(`Routing claim: "${claim.text.slice(0, 50)}" (type: ${claim.type})`);
+
+    switch (claim.type) {
+      case 'statistic': {
+        const result = await this.kosis.search(claim.text);
+        return { ...result, source: result.source };
+      }
+      case 'price': {
+        const result = await this.naver.searchShopping(claim.text);
+        return { ...result, source: result.source };
+      }
+      case 'regulation': {
+        const result = await this.lawKr.searchLaw(claim.text);
+        return { ...result, source: result.source };
+      }
+      case 'trend': {
+        const result = await this.googleTrends.getInterest(claim.text);
+        return { ...result, source: result.source };
+      }
+      case 'user_behavior': {
+        const result = await this.appReviews.searchApp(claim.text);
+        return { ...result, source: result.source };
+      }
+      case 'competitor': {
+        // Try Naver first, fall back to web scraper
+        if (this.naver.isConfigured()) {
+          const result = await this.naver.searchNews(claim.text);
+          return { ...result, source: result.source };
+        }
+        const result = await this.webScraper.search(claim.text);
+        return { ...result, source: result.source };
+      }
+      default: {
+        // Fallback to web scraper
+        const result = await this.webScraper.search(claim.text);
+        return { ...result, source: result.source };
+      }
+    }
+  }
+
+  /**
+   * Get available adapter status.
+   */
+  getAdapterStatus(): Record<string, boolean> {
+    return {
+      kosis: this.kosis.isConfigured(),
+      naver: this.naver.isConfigured(),
+      googleTrends: this.googleTrends.isConfigured(),
+      lawKr: this.lawKr.isConfigured(),
+      appReviews: this.appReviews.isConfigured(),
+      webScraper: this.webScraper.isConfigured(),
+    };
   }
 }

@@ -4,6 +4,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { ObsidianStore } from './core/obsidian-store.js';
 import { TaskManager } from './core/task-manager.js';
+import { ToolRegistry } from './core/tool-registry.js';
 import { recommendModel, listModels, type TaskType, type Complexity } from './core/model-selector.js';
 import { type AppConfig } from './core/config.js';
 import { PersonaLoader } from './personas/persona-loader.js';
@@ -11,7 +12,6 @@ import { PersonaEngine } from './personas/persona-engine.js';
 import { PersonaSimulator } from './personas/persona-simulator.js';
 import { analyzeGoal } from './workflow/understand.js';
 import { GroundingEngine } from './grounding/grounding-engine.js';
-import { ApiConnector } from './grounding/api-connector.js';
 import { CycleRunner } from './workflow/cycle-runner.js';
 import { ShellRunner } from './execution/shell-runner.js';
 import { createLogger } from './utils/logger.js';
@@ -24,14 +24,51 @@ export interface McpServerOptions {
 
 /**
  * Create and configure the MCP server with all agent tools.
+ * Tools are wrapped with a registry check — disabled tools
+ * return a clear message instead of executing.
  */
 export function createMcpServer(options: McpServerOptions): McpServer {
   const { config } = options;
 
   const server = new McpServer({
-    name: 'naedon-agent',
-    version: '0.2.0',
+    name: 'nongjong-agent',
+    version: '0.3.0',
   });
+
+  // ─── Tool Registry (runtime toggle) ───
+  const registry = new ToolRegistry();
+
+  // Register all tools with groups
+  // Group: "core" — always-on foundation
+  registry.register('agent_status', 'core', 'Agent server status');
+  registry.register('tool_toggle', 'core', 'Toggle tools on/off (meta)');
+  registry.register('tool_status', 'core', 'Show tool registry state (meta)');
+
+  // Group: "task" — task management
+  registry.register('task_list', 'task', 'List task queue');
+  registry.register('task_create', 'task', 'Create new task');
+
+  // Group: "model" — model selection
+  registry.register('recommend_model', 'model', 'Recommend optimal AI model');
+  registry.register('list_models', 'model', 'List all available models');
+
+  // Group: "memory" — Obsidian vault interaction
+  registry.register('memory_search', 'memory', 'Search agent memory');
+  registry.register('memory_write', 'memory', 'Write to agent memory');
+
+  // Group: "persona" — persona system
+  registry.register('persona_list', 'persona', 'List personas');
+  registry.register('persona_consult', 'persona', 'Consult personas');
+
+  // Group: "workflow" — AI circular workflow
+  registry.register('analyze_goal', 'workflow', 'Analyze user goal');
+  registry.register('run_cycle', 'workflow', 'Run full AI workflow cycle');
+
+  // Group: "advisory" — Ollama / LLM
+  registry.register('ollama_health', 'advisory', 'Check Ollama status');
+
+  // Group: "grounding" — data grounding
+  registry.register('ground_check', 'grounding', 'Detect and verify factual claims');
 
   // Initialize core modules
   const store = new ObsidianStore({ vaultPath: config.OBSIDIAN_VAULT_PATH });
@@ -50,9 +87,8 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     ollamaUrl: config.OLLAMA_URL,
   });
 
-  // Initialize grounding
-  const apiConnector = new ApiConnector();
-  const groundingEngine = new GroundingEngine({ apiConnector });
+  // Initialize grounding (design doc Section 6: adapters inside engine)
+  const groundingEngine = new GroundingEngine();
 
   // Initialize workflow
   const shellRunner = new ShellRunner();
@@ -62,6 +98,10 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     runShell: (cmd, cwd) => shellRunner.run(cmd, cwd),
   });
 
+  // ═══════════════════════════════════════
+  // META TOOLS (always enabled, group: core)
+  // ═══════════════════════════════════════
+
   // ─── Tool: agent_status ───
   server.tool(
     'agent_status',
@@ -70,20 +110,86 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     async () => {
       log.debug('agent_status called');
       const activeTask = await taskManager.getActiveTask();
+      const summary = registry.getSummary();
       return {
         content: [{
           type: 'text' as const,
           text: JSON.stringify({
             status: 'running',
-            version: '0.2.0',
+            version: '0.3.0',
             activeTask: activeTask ? { id: activeTask.id, title: activeTask.title } : null,
             obsidianVault: config.OBSIDIAN_VAULT_PATH,
             ollamaUrl: config.OLLAMA_URL,
+            toolGroups: summary,
           }, null, 2),
         }],
       };
     },
   );
+
+  // ─── Tool: tool_toggle ───
+  server.tool(
+    'tool_toggle',
+    'Toggle MCP tools on/off at runtime. Use name for single tool, group for batch toggle.',
+    {
+      name: z.string().optional().describe('Tool name to toggle (e.g., "ground_check")'),
+      group: z.string().optional().describe('Group name to toggle all tools in group (e.g., "persona", "grounding")'),
+      enabled: z.boolean().describe('true = enable, false = disable'),
+    },
+    async (params) => {
+      log.info('tool_toggle called', params);
+
+      if (params.name) {
+        const success = registry.toggle(params.name, params.enabled);
+        return {
+          content: [{
+            type: 'text' as const,
+            text: success
+              ? `✅ Tool "${params.name}" ${params.enabled ? 'ENABLED' : 'DISABLED'}`
+              : `❌ Tool "${params.name}" not found in registry`,
+          }],
+        };
+      }
+
+      if (params.group) {
+        const affected = registry.toggleGroup(params.group, params.enabled);
+        return {
+          content: [{
+            type: 'text' as const,
+            text: affected.length > 0
+              ? `✅ Group "${params.group}" ${params.enabled ? 'ENABLED' : 'DISABLED'}: ${affected.join(', ')}`
+              : `❌ No tools found in group "${params.group}"`,
+          }],
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: '❌ Specify either "name" or "group" to toggle.',
+        }],
+      };
+    },
+  );
+
+  // ─── Tool: tool_status ───
+  server.tool(
+    'tool_status',
+    'Show the current state of all registered tools (enabled/disabled)',
+    {},
+    async () => {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify(registry.getSummary(), null, 2),
+        }],
+      };
+    },
+  );
+
+  // ═══════════════════════════════════════
+  // TOGGLEABLE TOOLS (check registry before executing)
+  // ═══════════════════════════════════════
 
   // ─── Tool: task_list ───
   server.tool(
@@ -91,14 +197,12 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     'List all tasks in the agent queue',
     {},
     async () => {
+      if (!registry.isEnabled('task_list')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('task_list') }] };
+      }
       log.debug('task_list called');
       const tasks = await taskManager.getQueue();
-      return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify(tasks, null, 2),
-        }],
-      };
+      return { content: [{ type: 'text' as const, text: JSON.stringify(tasks, null, 2) }] };
     },
   );
 
@@ -113,14 +217,12 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       tags: z.array(z.string()).optional().describe('Optional tags'),
     },
     async (params) => {
+      if (!registry.isEnabled('task_create')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('task_create') }] };
+      }
       log.info('task_create called', params);
       const task = await taskManager.createTask(params);
-      return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify(task, null, 2),
-        }],
-      };
+      return { content: [{ type: 'text' as const, text: JSON.stringify(task, null, 2) }] };
     },
   );
 
@@ -134,18 +236,16 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       budgetConstrained: z.boolean().optional().describe('Prefer cheaper models'),
     },
     async (params) => {
+      if (!registry.isEnabled('recommend_model')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('recommend_model') }] };
+      }
       log.debug('recommend_model called', params);
       const recommendation = recommendModel({
         taskType: params.taskType as TaskType,
         complexity: params.complexity as Complexity,
         budgetConstrained: params.budgetConstrained,
       });
-      return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify(recommendation, null, 2),
-        }],
-      };
+      return { content: [{ type: 'text' as const, text: JSON.stringify(recommendation, null, 2) }] };
     },
   );
 
@@ -155,12 +255,10 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     'List all available AI models with their cost tiers',
     {},
     async () => {
-      return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify(listModels(), null, 2),
-        }],
-      };
+      if (!registry.isEnabled('list_models')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('list_models') }] };
+      }
+      return { content: [{ type: 'text' as const, text: JSON.stringify(listModels(), null, 2) }] };
     },
   );
 
@@ -173,6 +271,9 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       directory: z.string().optional().describe('Vault-relative directory to search in (defaults to agent data dir)'),
     },
     async (params) => {
+      if (!registry.isEnabled('memory_search')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('memory_search') }] };
+      }
       log.debug('memory_search called', params);
       const dir = params.directory || config.AGENT_DATA_DIR;
       const results = await store.searchNotes(dir, params.query);
@@ -181,8 +282,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
           type: 'text' as const,
           text: JSON.stringify(
             results.map((r) => ({ path: r.path, frontmatter: r.frontmatter, preview: r.content.slice(0, 200) })),
-            null,
-            2,
+            null, 2,
           ),
         }],
       };
@@ -199,14 +299,12 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       frontmatter: z.record(z.unknown()).optional().describe('Optional YAML frontmatter as key-value pairs'),
     },
     async (params) => {
+      if (!registry.isEnabled('memory_write')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('memory_write') }] };
+      }
       log.info('memory_write called', { path: params.path });
       await store.writeNote(params.path, params.content, params.frontmatter);
-      return {
-        content: [{
-          type: 'text' as const,
-          text: `✅ Note written to ${params.path}`,
-        }],
-      };
+      return { content: [{ type: 'text' as const, text: `✅ Note written to ${params.path}` }] };
     },
   );
 
@@ -216,14 +314,12 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     'List all available personas grouped by category',
     {},
     async () => {
+      if (!registry.isEnabled('persona_list')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('persona_list') }] };
+      }
       log.debug('persona_list called');
       const summary = await personaEngine.getPersonaSummary();
-      return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify(summary, null, 2),
-        }],
-      };
+      return { content: [{ type: 'text' as const, text: JSON.stringify(summary, null, 2) }] };
     },
   );
 
@@ -237,6 +333,9 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       maxPersonas: z.number().optional().describe('Max number of personas to consult (default: 3)'),
     },
     async (params) => {
+      if (!registry.isEnabled('persona_consult')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('persona_consult') }] };
+      }
       log.info('persona_consult called', params);
       const plan = await personaEngine.createConsultationPlan({
         stage: params.stage,
@@ -244,19 +343,12 @@ export function createMcpServer(options: McpServerOptions): McpServer {
         maxPersonas: params.maxPersonas,
       });
 
-      // If personas available and Ollama is up, run simulation
       if (plan.consultations.length > 0) {
         const health = await personaSimulator.healthCheck();
         if (health.available) {
           const results = await personaSimulator.runPlan(plan);
-          return {
-            content: [{
-              type: 'text' as const,
-              text: JSON.stringify(results, null, 2),
-            }],
-          };
+          return { content: [{ type: 'text' as const, text: JSON.stringify(results, null, 2) }] };
         }
-        // Ollama not available — return prompts only
         return {
           content: [{
             type: 'text' as const,
@@ -271,12 +363,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
         };
       }
 
-      return {
-        content: [{
-          type: 'text' as const,
-          text: 'No personas found for this stage/topic. Create personas first.',
-        }],
-      };
+      return { content: [{ type: 'text' as const, text: 'No personas found for this stage/topic.' }] };
     },
   );
 
@@ -289,17 +376,12 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       projectContext: z.string().optional().describe('Existing project context'),
     },
     async (params) => {
+      if (!registry.isEnabled('analyze_goal')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('analyze_goal') }] };
+      }
       log.info('analyze_goal called', { goalLength: params.goal.length });
-      const result = analyzeGoal({
-        goal: params.goal,
-        projectContext: params.projectContext,
-      });
-      return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify(result, null, 2),
-        }],
-      };
+      const result = analyzeGoal({ goal: params.goal, projectContext: params.projectContext });
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     },
   );
 
@@ -309,13 +391,11 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     'Check if Ollama (local LLM) is running and list available models',
     {},
     async () => {
+      if (!registry.isEnabled('ollama_health')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('ollama_health') }] };
+      }
       const health = await personaSimulator.healthCheck();
-      return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify(health, null, 2),
-        }],
-      };
+      return { content: [{ type: 'text' as const, text: JSON.stringify(health, null, 2) }] };
     },
   );
 
@@ -328,6 +408,9 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       verifyApi: z.boolean().optional().describe('If true, also call APIs to verify claims (default: false — quick check only)'),
     },
     async (params) => {
+      if (!registry.isEnabled('ground_check')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('ground_check') }] };
+      }
       log.info('ground_check called', { textLength: params.text.length });
       if (params.verifyApi) {
         const result = await groundingEngine.ground(params.text);
@@ -347,13 +430,17 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       projectContext: z.string().optional().describe('Existing project context'),
     },
     async (params) => {
+      if (!registry.isEnabled('run_cycle')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('run_cycle') }] };
+      }
       log.info('run_cycle called', { goal: params.goal.slice(0, 80) });
       const report = await cycleRunner.run({ goal: params.goal, projectContext: params.projectContext });
       return { content: [{ type: 'text' as const, text: report.markdown }] };
     },
   );
 
-  log.info('MCP Server configured with 13 tools');
+  const totalTools = registry.getState().length;
+  log.info(`MCP Server configured with ${totalTools} tools (runtime toggleable)`);
   return server;
 }
 

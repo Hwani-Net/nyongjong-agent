@@ -7,7 +7,8 @@ import { PersonaLoader } from './personas/persona-loader.js';
 import { PersonaEngine } from './personas/persona-engine.js';
 import { PersonaSimulator } from './personas/persona-simulator.js';
 import { GroundingEngine } from './grounding/grounding-engine.js';
-import { ApiConnector } from './grounding/api-connector.js';
+import { OllamaClient } from './advisory/ollama-client.js';
+import { LlmBenchmark } from './advisory/llm-benchmark.js';
 import { CycleRunner } from './workflow/cycle-runner.js';
 import { ShellRunner } from './execution/shell-runner.js';
 import { TestRunner } from './execution/test-runner.js';
@@ -22,7 +23,8 @@ export interface AgentModules {
   personaEngine: PersonaEngine;
   personaSimulator: PersonaSimulator;
   groundingEngine: GroundingEngine;
-  apiConnector: ApiConnector;
+  ollamaClient: OllamaClient;
+  llmBenchmark: LlmBenchmark;
   cycleRunner: CycleRunner;
   shellRunner: ShellRunner;
   testRunner: TestRunner;
@@ -31,6 +33,14 @@ export interface AgentModules {
 
 /**
  * Initialize all agent modules from config.
+ *
+ * Design doc Section 7 — module structure:
+ *   core/ → store, taskManager, modelSelector, config
+ *   personas/ → personaLoader, personaEngine, personaSimulator
+ *   grounding/ → groundingEngine (with adapters/ inside)
+ *   advisory/ → ollamaClient, llmBenchmark
+ *   execution/ → shellRunner, testRunner, gitWorktree
+ *   workflow/ → cycleRunner (understand, prototype, validate, evolve, report)
  */
 export function initializeAgent(config: AppConfig): AgentModules {
   log.info('━━━ Initializing 뇽죵이 Agent ━━━');
@@ -44,14 +54,12 @@ export function initializeAgent(config: AppConfig): AgentModules {
   const personaEngine = new PersonaEngine(personaLoader);
   const personaSimulator = new PersonaSimulator({ ollamaUrl: config.OLLAMA_URL });
 
-  // Grounding
-  const apiConnector = new ApiConnector({
-    apiKeys: {
-      naver_client_id: process.env.NAVER_CLIENT_ID || '',
-      naver_client_secret: process.env.NAVER_CLIENT_SECRET || '',
-    },
-  });
-  const groundingEngine = new GroundingEngine({ apiConnector });
+  // Grounding (design doc Section 6: adapters initialized inside engine)
+  const groundingEngine = new GroundingEngine();
+
+  // Advisory (design doc Section 7: advisory/)
+  const ollamaClient = new OllamaClient({ baseUrl: config.OLLAMA_URL });
+  const llmBenchmark = new LlmBenchmark({ ollamaClient });
 
   // Execution
   const shellRunner = new ShellRunner();
@@ -74,7 +82,8 @@ export function initializeAgent(config: AppConfig): AgentModules {
     personaEngine,
     personaSimulator,
     groundingEngine,
-    apiConnector,
+    ollamaClient,
+    llmBenchmark,
     cycleRunner,
     shellRunner,
     testRunner,
@@ -86,9 +95,9 @@ export function initializeAgent(config: AppConfig): AgentModules {
  * Get a status summary of all agent modules.
  */
 export async function getAgentStatus(modules: AgentModules, config: AppConfig): Promise<Record<string, unknown>> {
-  const ollamaHealth = await modules.personaSimulator.healthCheck();
+  const ollamaHealth = await modules.ollamaClient.healthCheck();
   const activeTask = await modules.taskManager.getActiveTask();
-  const availableApis = modules.apiConnector.getAvailableSources();
+  const adapterStatus = modules.groundingEngine.getAdapterStatus();
 
   return {
     version: '0.3.0',
@@ -96,7 +105,7 @@ export async function getAgentStatus(modules: AgentModules, config: AppConfig): 
     modules: {
       obsidian: { connected: true, vault: config.OBSIDIAN_VAULT_PATH },
       ollama: ollamaHealth,
-      grounding: { availableApis },
+      grounding: { adapters: adapterStatus },
       workflow: { status: modules.cycleRunner.getState().status },
     },
     activeTask: activeTask ? { id: activeTask.id, title: activeTask.title } : null,
