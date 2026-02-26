@@ -1,0 +1,16 @@
+{
+  "servers": {
+    "naedon-agent": {
+      "command": "npx",
+      "args": ["tsx", "src/index.ts"],
+      "cwd": "e:/Agent/뇽죵이Agent",
+      "env": {
+        "OBSIDIAN_VAULT_PATH": "C:/Users/AIcreator/ObsidianVault",
+        "AGENT_DATA_DIR": "뇽죵이Agent",
+        "OLLAMA_URL": "http://localhost:11434",
+        "LOG_LEVEL": "info",
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  }
+}
