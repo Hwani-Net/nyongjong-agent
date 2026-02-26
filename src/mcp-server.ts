@@ -15,8 +15,16 @@ import { GroundingEngine } from './grounding/grounding-engine.js';
 import { CycleRunner } from './workflow/cycle-runner.js';
 import { ShellRunner } from './execution/shell-runner.js';
 import { createLogger } from './utils/logger.js';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 
 const log = createLogger('mcp-server');
+
+// Resolve project root from import.meta.url — NOT process.cwd()
+// This prevents CWD-dependent bugs when launched from Antigravity/VS Code
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const PROJECT_ROOT = resolve(__dirname, '..');
 
 export interface McpServerOptions {
   config: AppConfig;
@@ -94,7 +102,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
   const shellRunner = new ShellRunner();
   const cycleRunner = new CycleRunner({
     maxRetries: 3,
-    projectRoot: process.cwd(),
+    projectRoot: PROJECT_ROOT,
     runShell: (cmd, cwd) => shellRunner.run(cmd, cwd),
   });
 

@@ -13,8 +13,15 @@ import { CycleRunner } from './workflow/cycle-runner.js';
 import { ShellRunner } from './execution/shell-runner.js';
 import { TestRunner } from './execution/test-runner.js';
 import { GitWorktree } from './execution/git-worktree.js';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 
 const log = createLogger('agent');
+
+// Resolve project root from import.meta.url — NOT process.cwd()
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const PROJECT_ROOT = resolve(__dirname, '..');
 
 export interface AgentModules {
   store: ObsidianStore;
@@ -63,13 +70,13 @@ export function initializeAgent(config: AppConfig): AgentModules {
 
   // Execution
   const shellRunner = new ShellRunner();
-  const testRunner = new TestRunner({ shellRunner, projectRoot: process.cwd() });
-  const gitWorktree = new GitWorktree({ repoPath: process.cwd(), shellRunner });
+  const testRunner = new TestRunner({ shellRunner, projectRoot: PROJECT_ROOT });
+  const gitWorktree = new GitWorktree({ repoPath: PROJECT_ROOT, shellRunner });
 
   // Workflow
   const cycleRunner = new CycleRunner({
     maxRetries: 3,
-    projectRoot: process.cwd(),
+    projectRoot: PROJECT_ROOT,
     runShell: (cmd, cwd) => shellRunner.run(cmd, cwd),
   });
 
