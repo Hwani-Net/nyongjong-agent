@@ -137,6 +137,16 @@ export function analyzeGoal(input: UnderstandInput): UnderstandOutput {
   if (hasExternalAPI) risks.push('외부 API 의존성 — 장애 전파 가능');
   if (hasMigration) risks.push('마이그레이션 — 기존 기능 회귀 위험');
 
+  // Destructive operation detection
+  const hasDangerous = /rm\s+-rf|DROP\s+(TABLE|DATABASE)|DELETE\s+FROM|삭제|초기화|format|truncate/i.test(goal);
+  const hasProduction = /프로덕션|production|prod\s|운영\s?서버|라이브/i.test(goal);
+  if (hasDangerous) {
+    risks.push('⚠️ 파괴적 작업 — 데이터 손실 위험! 사전 승인 필수');
+  }
+  if (hasDangerous && hasProduction) {
+    risks.push('🚨 프로덕션 환경 대상 — 즉시 실행 금지, 대표님 승인 후 진행');
+  }
+
   // Scope: refactoring, debugging, documentation on existing files = existing project
   const scope = (projectContext || hasRefactor || hasBug || hasDocumentation) ? '기존 프로젝트 확장' : '새 프로젝트';
   const nextAction = taskType === 'debugging'
