@@ -29,6 +29,7 @@ export interface GapAnalysis {
 const STAT_PATTERNS = [
   /(\d+(?:\.\d+)?)\s*(%|percent|퍼센트)/gi,
   /(\d{1,3}(?:,\d{3})*)\s*(명|건|원|개|대|달러|만|억|조)/gi,
+  /(\d{4,})\s*(명|건|원|개|대|달러|만|억|조|개|위)/gi,  // 4+ digit numbers
   /약\s*\d+/gi,
   /전년\s*(대비|비)\s*\d+/gi,
 ];
@@ -49,6 +50,22 @@ const PRICE_PATTERNS = [
   /\d+(?:,\d{3})* *원/gi,
   /\$\d+(?:,\d{3})*(?:\.\d{2})?/gi,
   /시가총액|매출액|영업이익/gi,
+];
+
+// Comparative/superlative claims — "가장 큰", "세계 최대", "1위"
+const COMPARISON_PATTERNS = [
+  /세계에서\s*(가장|제일).{0,20}/g,
+  /국내\s*(최대|최초|유일|1위)/g,
+  /(가장|제일)\s*(큰|작은|많은|적은|높은|낮은|빠른)/g,
+  /\d+\s*(위|등|번째)/g,
+  /세계\s*\d+위/g,
+];
+
+// Technology version claims — "Node.js 22", "TypeScript 5.8"
+const TECH_VERSION_PATTERNS = [
+  /(Node\.?js|TypeScript|Python|Java|Go|Rust|React|Next\.?js|Vue)\s*v?(\d+(?:\.\d+)*)/gi,
+  /(LTS|최신|안정)\s*(버전|릴리스)[은는이가]\s*.{0,20}/g,
+  /v\d+\.\d+(?:\.\d+)?/gi,
 ];
 
 /**
@@ -165,6 +182,32 @@ export function detectGaps(text: string): GapAnalysis {
         type: 'competitor',
         groundingNeed: 0.7,
         suggestedSource: '웹 검색/크롤링',
+      });
+    }
+  }
+
+  // Check for comparative/superlative claims
+  for (const pattern of COMPARISON_PATTERNS) {
+    const matches = text.matchAll(new RegExp(pattern.source, pattern.flags));
+    for (const match of matches) {
+      claims.push({
+        text: match[0],
+        type: 'general',
+        groundingNeed: 0.85,
+        suggestedSource: '웹 검색/공식 통계',
+      });
+    }
+  }
+
+  // Check for tech version claims
+  for (const pattern of TECH_VERSION_PATTERNS) {
+    const matches = text.matchAll(new RegExp(pattern.source, pattern.flags));
+    for (const match of matches) {
+      claims.push({
+        text: match[0],
+        type: 'general',
+        groundingNeed: 0.7,
+        suggestedSource: '공식 문서/GitHub Releases',
       });
     }
   }

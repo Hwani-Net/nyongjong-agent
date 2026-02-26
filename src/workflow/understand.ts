@@ -118,8 +118,8 @@ export function analyzeGoal(input: UnderstandInput): UnderstandOutput {
   if (hasExternalAPI) risks.push('외부 API 의존성 — 장애 전파 가능');
   if (hasMigration) risks.push('마이그레이션 — 기존 기능 회귀 위험');
 
-  // Scope: refactoring existing code is ALWAYS an existing project
-  const scope = (projectContext || hasRefactor || hasBug) ? '기존 프로젝트 확장' : '새 프로젝트';
+  // Scope: refactoring, debugging, documentation on existing files = existing project
+  const scope = (projectContext || hasRefactor || hasBug || hasDocumentation) ? '기존 프로젝트 확장' : '새 프로젝트';
   const nextAction = taskType === 'debugging'
     ? '버그 재현 → 원인 분석 → 수정'
     : taskType === 'strategy' ? '요구사항 분석 → 대안 비교 → 전략 수립'
