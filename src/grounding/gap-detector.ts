@@ -231,7 +231,12 @@ export function detectGaps(text: string): GapAnalysis {
       // Extract core number from both
       const numA = claim.text.replace(/[^\d.]/g, '');
       const numB = existing.text.replace(/[^\d.]/g, '');
-      return numA.length > 0 && numA === numB && claim.type === existing.type;
+      if (numA.length === 0 || numB.length === 0) return false;
+      // Exact same number
+      if (numA === numB && claim.type === existing.type) return true;
+      // One number is suffix of the other (e.g. '800' is suffix of '2800')
+      if (claim.type === existing.type && (numB.endsWith(numA) || numA.endsWith(numB))) return true;
+      return false;
     });
     if (!isSubstringOfExisting && !containsSameNumberToken) {
       deduped.push(claim);
