@@ -102,7 +102,13 @@ export function recommendModel(input: SelectionInput): ModelRecommendation {
   log.debug('Selecting model', { taskType, complexity, budgetConstrained });
 
   // Score each model
-  const scored = Object.entries(MODEL_PROFILES).map(([modelId, profile]) => {
+  const scored = Object.entries(MODEL_PROFILES)
+    .filter(([_, profile]) => {
+      // Hard cap: never recommend costTier 4 when budget-constrained
+      if (budgetConstrained && profile.costTier >= 4) return false;
+      return true;
+    })
+    .map(([modelId, profile]) => {
     let score = 0;
 
     // Task type match (+3)

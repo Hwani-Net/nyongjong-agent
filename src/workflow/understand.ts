@@ -60,15 +60,15 @@ export function analyzeGoal(input: UnderstandInput): UnderstandOutput {
   }
 
   // Extract key signals from the goal text
-  const hasUI = /ui|페이지|화면|컴포넌트|디자인|프론트/i.test(goal);
+  const hasUI = /ui|페이지|화면|컴포넌트|디자인|프론트|대시보드|차트|테이블|그래프|D3/i.test(goal);
   const hasAPI = /api|엔드포인트|서버|백엔드|라우트/i.test(goal);
   const hasBug = /버그|에러|오류|수정|안\s?[돼되]|문제|끊어|실패|깨/i.test(goal);
-  const hasNew = /만들|생성|추가|새\s?[로운]|구현/i.test(goal);
+  const hasNew = /만들|생성|추가|새\s?[로운]|구현|구축|설정|배포|세팅/i.test(goal);
   const hasRefactor = /리팩|개선|정리|최적화|구조|분리|모듈/i.test(goal);
   const hasStrategy = /전략|설계|아키텍처|비교|분석|수립|방향|로드맵/i.test(goal);
   const hasDocumentation = /문서|README|가이드|트러블|설명|주석|CHANGELOG/i.test(goal);
   const hasSimple = /확인|조회|목록|리스트|보여|알려/i.test(goal);
-  const hasExternalAPI = /카카오|네이버|구글|AWS|Firebase|Supabase|외부\s?API|연동/i.test(goal);
+  const hasExternalAPI = /카카오|네이버|구글|AWS|Firebase|Supabase|외부\s?API|연동|Slack|Discord|Telegram/i.test(goal);
   const hasMultiFile = /분리|여러\s?파일|모듈|마이크로서비스|독립|컴포넌트\s?분리/i.test(goal);
   const hasMigration = /마이그레이션|전환|이전|업그레이드|포팅/i.test(goal);
 
