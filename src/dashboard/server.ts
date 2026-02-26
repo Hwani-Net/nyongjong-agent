@@ -749,7 +749,7 @@ function appendTerminal(text, cls) {
     if (l.startsWith('❌') || l.startsWith('ERROR')) return '<span class="err">' + l + '</span>';
     if (l.startsWith('$')) return '<span class="cmd">' + l + '</span>';
     return '<span class="info">' + l + '</span>';
-  }).join('\n');
+  }).join('<br>');
   area.scrollTop = area.scrollHeight;
 }
 function clearTerminal() { terminalLines = []; document.getElementById('terminalOutput').innerHTML = ''; }
@@ -782,8 +782,8 @@ function renderDecisions() {
       '<div class="decision-title">' + d.title + '</div>' +
       '<div class="decision-meta">Stage: ' + d.stage + ' | Priority: ' + d.priority + ' | ' + d.timestamp + '</div>' +
       (d.state === 'pending' ? '<div class="decision-actions">' +
-        '<button class="btn btn-accent" onclick="resolveDecision(' + i + ',\'approved\')">✅ Approve</button>' +
-        '<button class="btn" onclick="resolveDecision(' + i + ',\'rejected\')">❌ Reject</button>' +
+        '<button class="btn btn-accent" onclick="resolveDecision(' + i + ',&apos;approved&apos;)">✅ Approve</button>' +
+        '<button class="btn" onclick="resolveDecision(' + i + ',&apos;rejected&apos;)">❌ Reject</button>' +
       '</div>' : '<span class="badge badge-' + (d.state === 'approved' ? 'green' : 'red') + '">' + d.state + '</span>') +
     '</div>';
   }).join('');
@@ -959,28 +959,72 @@ function updateDashboard(data) {
   }
 }
 
-// SSE connection
-const evtSource = new EventSource('/events');
-evtSource.onopen = () => {
-  document.getElementById('statusBadge').className = 'badge badge-green';
-  document.getElementById('statusBadge').innerHTML = '<span class="pulse">●</span> Connected';
-  addLog('SSE connected');
-};
-evtSource.onmessage = (e) => {
+// Immediate data load — don't wait for SSE
+(async function loadInitialData() {
   try {
-    const data = JSON.parse(e.data);
+    const resp = await fetch('/api/status');
+    const data = await resp.json();
     updateDashboard(data);
     updateOfficeFromSSE(data);
-    if (document.querySelector('[data-page="office"].active')) renderOffice();
     document.getElementById('statusBadge').className = 'badge badge-green';
     document.getElementById('statusBadge').innerHTML = '<span class="pulse">●</span> Connected';
-  } catch {}
-};
-evtSource.onerror = () => {
-  document.getElementById('statusBadge').className = 'badge badge-red';
-  document.getElementById('statusBadge').innerHTML = '● Disconnected';
-  addLog('Connection lost — auto-reconnecting...');
-};
+    addLog('Initial data loaded via fetch');
+  } catch (e) {
+    addLog('Initial fetch failed: ' + e.message);
+  }
+})();
+
+// SSE connection for real-time updates
+let sseRetryCount = 0;
+function connectSSE() {
+  const evtSource = new EventSource('/events');
+  evtSource.onopen = () => {
+    sseRetryCount = 0;
+    document.getElementById('statusBadge').className = 'badge badge-green';
+    document.getElementById('statusBadge').innerHTML = '<span class="pulse">●</span> Connected';
+    addLog('SSE connected');
+  };
+  evtSource.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      if (data.type === 'ping') return; // ignore keepalive
+      updateDashboard(data);
+      updateOfficeFromSSE(data);
+      if (document.querySelector('[data-page="office"].active')) renderOffice();
+      document.getElementById('statusBadge').className = 'badge badge-green';
+      document.getElementById('statusBadge').innerHTML = '<span class="pulse">●</span> Connected';
+    } catch (err) {
+      addLog('SSE parse error: ' + err.message);
+    }
+  };
+  evtSource.onerror = () => {
+    sseRetryCount++;
+    document.getElementById('statusBadge').className = 'badge badge-orange';
+    document.getElementById('statusBadge').innerHTML = '● Reconnecting...';
+    addLog('SSE disconnected — retry #' + sseRetryCount);
+    if (sseRetryCount > 5) {
+      evtSource.close();
+      addLog('SSE failed after 5 retries — falling back to polling');
+      startPolling();
+    }
+  };
+}
+connectSSE();
+
+// Fallback polling if SSE fails
+let pollingInterval = null;
+function startPolling() {
+  if (pollingInterval) return;
+  pollingInterval = setInterval(async () => {
+    try {
+      const resp = await fetch('/api/status');
+      const data = await resp.json();
+      updateDashboard(data);
+      document.getElementById('statusBadge').className = 'badge badge-blue';
+      document.getElementById('statusBadge').innerHTML = '● Polling';
+    } catch {}
+  }, 5000);
+}
 
 addLog('Dashboard v0.4.0 loaded');
 renderDecisions();

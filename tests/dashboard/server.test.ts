@@ -138,11 +138,32 @@ describe('Dashboard Server', () => {
       expect(content).toContain('badge-green');
     });
 
-    it('should show Disconnected badge on SSE error', async () => {
+    it('should show Reconnecting badge on SSE error', async () => {
       const fs = await import('fs/promises');
       const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
-      expect(content).toContain('Disconnected');
-      expect(content).toContain('badge-red');
+      expect(content).toContain('Reconnecting');
+      expect(content).toContain('badge-orange');
+    });
+
+    it('should have initial data fetch independent of SSE', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain('loadInitialData');
+      expect(content).toContain("fetch('/api/status')");
+    });
+
+    it('should have fallback polling when SSE fails', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain('startPolling');
+      expect(content).toContain('pollingInterval');
+      expect(content).toContain('falling back to polling');
+    });
+
+    it('should ignore keepalive ping messages', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain("data.type === 'ping'");
     });
   });
 
