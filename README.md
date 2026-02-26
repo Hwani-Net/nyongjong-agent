@@ -13,7 +13,7 @@ cp .env.example .env    # 경로 설정
 npm start               # MCP 서버 (Antigravity 자동 연결)
 npm run dashboard       # 대시보드 → http://localhost:3100
 npm run test:mcp        # MCP 연결 검증
-npm test                # 유닛 테스트 (138/138)
+npm test                # 유닛 테스트 (149/149)
 npm run test:coverage   # 커버리지 리포트
 ```
 

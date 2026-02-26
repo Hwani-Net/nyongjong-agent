@@ -45,13 +45,15 @@ describe('PersonaSimulator', () => {
 
   it('should run a full consultation plan', async () => {
     const plan: ConsultationPlan = {
+      stage: 'understand',
+      topic: '비용/UX 평가',
       consultations: [
         {
-          persona: { name: '내돈내산 대표', systemPrompt: '비용 관점', traits: [], stages: ['understand'], category: 'business', priority: 1 },
+          persona: { id: 'ceo', name: '내돈내산 대표', category: 'business', era: 'modern', activatedAt: ['understand'], priority: 'high', content: '비용 관점 페르소나', metadata: {} },
           prompt: '이 기능의 비용은?',
         },
         {
-          persona: { name: '사용자 대변인', systemPrompt: '사용자 관점', traits: [], stages: ['validate'], category: 'customer', priority: 2 },
+          persona: { id: 'user-advocate', name: '사용자 대변인', category: 'customer', era: 'modern', activatedAt: ['validate'], priority: 'normal', content: '사용자 관점 페르소나', metadata: {} },
           prompt: '사용자 경험은?',
         },
       ],
