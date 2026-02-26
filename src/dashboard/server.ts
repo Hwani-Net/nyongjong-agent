@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'http';
 import { createLogger } from '../utils/logger.js';
 import { type AppConfig } from '../core/config.js';
 import { initializeAgent, getAgentStatus } from '../agent.js';
+import { analyzeGoal } from '../workflow/understand.js';
 
 const log = createLogger('dashboard');
 
@@ -1067,30 +1068,89 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
             const status = await getAgentStatus(modules, config);
             reply = `현재 상태입니다:\n• 서버: ${status.status}\n• 도구: ${(status.enabledTools as string[] || []).length}개 활성\n• 태스크 큐: ${(status.taskQueue as unknown[] || []).length}건\n• Ollama: ${status.ollamaStatus || 'N/A'}\n• 버전: v${status.version}`;
             action = 'status_check';
+
           } else if (lowerMsg.includes('빌드') || lowerMsg.includes('build')) {
-            reply = '빌드를 시작합니다! Terminal 페이지에서 진행상황을 확인하세요. 🔨';
-            action = 'build_triggered';
+            // Actually run the build
+            try {
+              const buildResult = await modules.shellRunner.run('npm run build', process.cwd());
+              if (buildResult.exitCode === 0) {
+                reply = `✅ 빌드 성공! (${buildResult.durationMs}ms)\n\n${buildResult.stdout.slice(-300)}`;
+              } else {
+                reply = `❌ 빌드 실패 (exit code: ${buildResult.exitCode})\n\n${buildResult.stderr.slice(-500)}`;
+              }
+            } catch (e) {
+              reply = `⚠️ 빌드 실행 중 오류: ${e instanceof Error ? e.message : String(e)}`;
+            }
+            action = 'build_executed';
+
           } else if (lowerMsg.includes('테스트') || lowerMsg.includes('test')) {
-            reply = '테스트를 실행합니다! Terminal 페이지에서 결과를 확인하세요. 🧪';
-            action = 'test_triggered';
+            // Actually run the tests
+            try {
+              const testResult = await modules.shellRunner.run('npx vitest run', process.cwd());
+              if (testResult.exitCode === 0) {
+                // Extract pass count from output
+                const passMatch = testResult.stdout.match(/Tests\s+(\d+)\s+passed/);
+                const fileMatch = testResult.stdout.match(/Test Files\s+(\d+)\s+passed/);
+                const passes = passMatch?.[1] || '?';
+                const files = fileMatch?.[1] || '?';
+                reply = `✅ 테스트 통과! ${passes}건 / ${files}파일 (${testResult.durationMs}ms)\n\n${testResult.stdout.slice(-400)}`;
+              } else {
+                reply = `❌ 테스트 실패 (exit code: ${testResult.exitCode})\n\n${testResult.stderr.slice(-500)}`;
+              }
+            } catch (e) {
+              reply = `⚠️ 테스트 실행 중 오류: ${e instanceof Error ? e.message : String(e)}`;
+            }
+            action = 'test_executed';
+
+          } else if (lowerMsg.includes('분석') || lowerMsg.includes('analyze') || lowerMsg.includes('분석해')) {
+            // Run actual goal analysis
+            const goalText = message.replace(/분석|analyze|분석해/gi, '').trim() || message;
+            const result = analyzeGoal(goalText);
+            const a = result.analysis;
+            reply = `🔍 목표 분석 결과:\n• 유형: ${a.taskType}\n• 복잡도: ${a.complexity}\n• 범위: ${a.scope}\n• 위험: ${a.risks?.join(', ') || '없음'}\n• 요구사항: ${a.keyRequirements?.join(', ') || '일반'}\n\n💡 다음 액션: ${result.nextAction}`;
+            action = 'goal_analyzed';
+
+          } else if (lowerMsg.includes('검증') || lowerMsg.includes('팩트') || lowerMsg.includes('ground')) {
+            // Run grounding check on the message
+            const textToCheck = message.replace(/검증|팩트|ground|체크/gi, '').trim() || message;
+            const groundResult = await modules.groundingEngine.ground(textToCheck);
+            const claimLines = groundResult.verifications.map((v: { claim: { text: string; type: string }; verified: boolean; apiResult: { source: string } }) =>
+              `  ${v.verified ? '✅' : '❌'} "${v.claim.text}" (${v.claim.type}) → ${v.apiResult.source}`
+            ).join('\n');
+            reply = `🔎 팩트 검증 결과 (${groundResult.status}):\n• 총 주장: ${groundResult.analysis.claims.length}건\n• 검증됨: ${groundResult.verifications.filter((v: { verified: boolean }) => v.verified).length}건\n${claimLines ? '\n' + claimLines : ''}\n\n${groundResult.summary}`;
+            action = 'ground_check';
+
+          } else if (lowerMsg.includes('그라운딩') || lowerMsg.includes('어댑터') || lowerMsg.includes('adapter')) {
+            // Show grounding adapter status
+            const adapterStatus = modules.groundingEngine.getAdapterStatus();
+            const adapterLines = Object.entries(adapterStatus).map(([name, configured]) =>
+              `  ${configured ? '🟢' : '🔴'} ${name}: ${configured ? '연결됨' : '미설정'}`
+            ).join('\n');
+            reply = `📡 Grounding 어댑터 상태:\n${adapterLines}\n\n🟢 = API 사용 가능 | 🔴 = API 키 필요\n\n무료 어댑터: LawKR (법령정보), GoogleTrends\nAPI 키 필요: KOSIS, Naver Search`;
+            action = 'adapter_status';
+
           } else if (lowerMsg.includes('페르소나') || lowerMsg.includes('persona')) {
             const personas = await modules.personaLoader.loadAll();
             reply = `현재 ${personas.length}개 페르소나가 등록되어 있습니다:\n${personas.map((p: { name: string; category: string }) => `• ${p.name} (${p.category})`).join('\n')}`;
             action = 'persona_list';
+
           } else if (lowerMsg.includes('태스크') || lowerMsg.includes('task') || lowerMsg.includes('할일')) {
             const tasks = await modules.taskManager.getQueue();
             reply = tasks.length > 0
               ? `현재 ${tasks.length}개 태스크가 있습니다:\n${tasks.slice(0, 5).map((t: { status: string; title: string }) => `• [${t.status}] ${t.title}`).join('\n')}`
               : '현재 태스크 큐가 비어 있습니다. 새 태스크를 추가해보세요! 📝';
             action = 'task_list';
+
           } else if (lowerMsg.includes('모델') || lowerMsg.includes('model')) {
             reply = '사용 가능한 모델 목록:\n• Gemini 3.1 Pro (High) — 복잡한 설계\n• Gemini 3.1 Pro (Low) — 구현/리팩터링\n• Gemini 3 Flash — 빠른 단순 작업\n• Claude Sonnet 4.6 — 논리적 추론\n• Claude Opus 4.6 — 최고 난이도\n• GPT-OSS 120B — 범용';
             action = 'model_list';
+
           } else if (lowerMsg.includes('도움') || lowerMsg.includes('help') || lowerMsg.includes('뭐')) {
-            reply = '사용 가능한 명령어:\n• "상태" — 에이전트 상태 확인\n• "빌드" — 프로젝트 빌드\n• "테스트" — 테스트 실행\n• "페르소나" — 페르소나 목록\n• "태스크" — 태스크 큐 조회\n• "모델" — AI 모델 목록\n\n자유롭게 질문해주세요! 🐾';
+            reply = '🐾 사용 가능한 명령어:\n\n📊 시스템\n• "상태" — 에이전트 상태 확인\n• "어댑터" — Grounding API 연결 상태\n\n🔨 실행\n• "빌드" — 프로젝트 빌드 실행\n• "테스트" — 유닛 테스트 실행\n\n🧠 AI\n• "분석 [목표]" — 목표 분석 (유형/복잡도)\n• "검증 [텍스트]" — 팩트 체크 (실제 API)\n\n📋 조회\n• "페르소나" — 페르소나 목록\n• "태스크" — 태스크 큐 조회\n• "모델" — AI 모델 목록';
             action = 'help';
+
           } else {
-            reply = `"${message}" — 알겠습니다 대표님! 해당 내용을 분석하고 처리하겠습니다. 🤔\n\n팁: "상태", "빌드", "페르소나", "태스크", "모델" 등의 키워드를 사용하면 더 정확한 응답을 받을 수 있습니다.`;
+            reply = `"${message}" — 알겠습니다 대표님! 🤔\n\n💡 "도움"을 입력하면 사용 가능한 명령어를 확인할 수 있습니다.\n\n🔎 빠른 실행:\n• "빌드" — 즉시 빌드\n• "테스트" — 즉시 테스트\n• "검증 ${message}" — 이 텍스트 팩트 체크\n• "분석 ${message}" — 이 목표 분석`;
             action = 'general_response';
           }
 
