@@ -1105,7 +1105,7 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
           } else if (lowerMsg.includes('분석') || lowerMsg.includes('analyze') || lowerMsg.includes('분석해')) {
             // Run actual goal analysis
             const goalText = message.replace(/분석|analyze|분석해/gi, '').trim() || message;
-            const result = analyzeGoal(goalText);
+            const result = analyzeGoal({ goal: goalText });
             const a = result.analysis;
             reply = `🔍 목표 분석 결과:\n• 유형: ${a.taskType}\n• 복잡도: ${a.complexity}\n• 범위: ${a.scope}\n• 위험: ${a.risks?.join(', ') || '없음'}\n• 요구사항: ${a.keyRequirements?.join(', ') || '일반'}\n\n💡 다음 액션: ${result.nextAction}`;
             action = 'goal_analyzed';
