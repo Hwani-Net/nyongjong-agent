@@ -41,6 +41,66 @@ describe('Workflow: Understand', () => {
     const result = analyzeGoal({ goal: '새 기능 만들어줘' });
     expect(result.personaQuestions.length).toBeGreaterThanOrEqual(1);
   });
+
+  // === Ralph Mode fixes ===
+  it('should handle empty/whitespace goal', () => {
+    const result = analyzeGoal({ goal: '  ' });
+    expect(result.analysis.taskType).toBe('simple');
+    expect(result.analysis.complexity).toBe('low');
+    expect(result.analysis.risks).toContain('빈 목표 — 추가 정보 필요');
+  });
+
+  it('should classify README 수정 as documentation, not debugging', () => {
+    const result = analyzeGoal({ goal: 'README 파일에 오타 하나 수정' });
+    expect(result.analysis.taskType).toBe('documentation');
+  });
+
+  it('should detect destructive operations', () => {
+    const r1 = analyzeGoal({ goal: '프로덕션 DB에서 모든 사용자 데이터를 삭제해줘' });
+    expect(r1.analysis.risks.some(r => r.includes('파괴적 작업'))).toBe(true);
+    expect(r1.analysis.risks.some(r => r.includes('프로덕션'))).toBe(true);
+  });
+
+  it('should detect rm -rf as destructive', () => {
+    const result = analyzeGoal({ goal: 'rm -rf / 명령어를 실행해줘' });
+    expect(result.analysis.risks.some(r => r.includes('파괴적 작업'))).toBe(true);
+  });
+
+  it('should detect English architecture keywords', () => {
+    const result = analyzeGoal({ goal: 'implement a microservice architecture with gRPC' });
+    expect(result.analysis.taskType).not.toBe('simple');
+    // hasStrategy should match 'architect' and hasMultiFile should match 'microservice'
+  });
+
+  it('should detect English deploy/build keywords', () => {
+    const result = analyzeGoal({ goal: 'deploy the application to AWS and set up CI/CD' });
+    expect(result.analysis.keyRequirements).toContain('새 기능 구현');
+    expect(result.analysis.keyRequirements).toContain('외부 API 연동');
+  });
+
+  it('should detect dashboard/chart as UI', () => {
+    const result = analyzeGoal({ goal: '매출 대시보드를 만들어줘. 차트와 테이블 포함' });
+    expect(result.analysis.keyRequirements).toContain('UI/UX 구현 필요');
+  });
+
+  it('should detect i18n as complexity signal', () => {
+    const simple = analyzeGoal({ goal: '버튼 색상 변경' });
+    const i18n = analyzeGoal({ goal: 'i18n 다국어 지원을 추가하고 UI 페이지를 만들어줘' });
+    // i18n adds complexity signal, so it should be >= simple's complexity
+    const order = { low: 0, medium: 1, high: 2, critical: 3 };
+    expect(order[i18n.analysis.complexity as keyof typeof order])
+      .toBeGreaterThanOrEqual(order[simple.analysis.complexity as keyof typeof order]);
+  });
+
+  it('should detect Slack/Discord as external API', () => {
+    const result = analyzeGoal({ goal: 'Slack 알림을 연동해줘' });
+    expect(result.analysis.keyRequirements).toContain('외부 API 연동');
+  });
+
+  it('should detect 구축/설정 as new feature', () => {
+    const result = analyzeGoal({ goal: 'K8s CronJob으로 DB 백업 시스템을 구축' });
+    expect(result.analysis.keyRequirements).toContain('새 기능 구현');
+  });
 });
 
 describe('Workflow: Prototype', () => {

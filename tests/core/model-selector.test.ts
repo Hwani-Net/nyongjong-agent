@@ -78,4 +78,25 @@ describe('ModelSelector', () => {
     expect(models).toHaveLength(6);
     expect(models.every((m) => m.id && m.displayName && m.costTier)).toBe(true);
   });
+
+  // === Ralph Mode fix ===
+  it('should never recommend Opus (costTier 4) when budget constrained', () => {
+    const result = recommendModel({
+      taskType: 'strategy',
+      complexity: 'critical',
+      budgetConstrained: true,
+    });
+    expect(result.costTier).toBeLessThanOrEqual(3);
+    expect(result.model).not.toBe('claude-opus-4.6-thinking');
+  });
+
+  it('should recommend Opus for non-budget critical strategy', () => {
+    const result = recommendModel({
+      taskType: 'strategy',
+      complexity: 'critical',
+      budgetConstrained: false,
+    });
+    expect(result.model).toBe('claude-opus-4.6-thinking');
+    expect(result.costTier).toBe(4);
+  });
 });

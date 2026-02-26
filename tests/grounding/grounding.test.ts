@@ -51,6 +51,53 @@ describe('GapDetector', () => {
     expect(result.overallScore).toBeGreaterThan(0);
     expect(result.claims.length).toBeGreaterThanOrEqual(2);
   });
+
+  // === Ralph Mode fixes ===
+  it('should not match 000 as a valid number (non-zero leading digit)', () => {
+    const result = detectGaps('2000조원 규모');
+    // Should NOT produce a claim with text '000조'
+    const hasBadClaim = result.claims.some(c => c.text === '000조');
+    expect(hasBadClaim).toBe(false);
+  });
+
+  it('should dedup suffix numbers (800 from 2800)', () => {
+    const result = detectGaps('경제활동인구는 약 2800만명입니다.');
+    // Should not have both '약 2800' and '800만' — dedup should remove '800만'
+    const texts = result.claims.map(c => c.text);
+    const has800 = texts.some(t => t === '800만');
+    expect(has800).toBe(false);
+  });
+
+  it('should capture unit suffix with 약 pattern', () => {
+    const result = detectGaps('약 1조 3000억원');
+    // '약 1조' should be captured, not just '약 1'
+    const approxClaim = result.claims.find(c => c.text.startsWith('약'));
+    if (approxClaim) {
+      expect(approxClaim.text.length).toBeGreaterThan(3); // More than just '약 1'
+    }
+  });
+
+  it('should detect law names with Korean particles', () => {
+    const result = detectGaps('개인정보보호법에 따르면 동의가 필요합니다.');
+    const regClaims = result.claims.filter(c => c.type === 'regulation');
+    expect(regClaims.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('should handle empty text gracefully', () => {
+    const result = detectGaps('');
+    expect(result.claims.length).toBe(0);
+    expect(result.overallScore).toBe(0);
+  });
+
+  it('should detect regulation + statistic together without over-counting', () => {
+    const result = detectGaps('전자상거래법에 따라 5000억원 이상 사업자는 공시 의무가 있습니다.');
+    const regCount = result.claims.filter(c => c.type === 'regulation').length;
+    const statCount = result.claims.filter(c => c.type === 'statistic').length;
+    expect(regCount).toBeGreaterThanOrEqual(1);
+    expect(statCount).toBeGreaterThanOrEqual(1);
+    // Should not have excessive total claims
+    expect(result.claims.length).toBeLessThanOrEqual(4);
+  });
 });
 
 describe('GroundingEngine', () => {

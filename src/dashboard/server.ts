@@ -1043,9 +1043,10 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
         const output = execSync(cmd, { cwd: process.cwd(), encoding: 'utf-8', timeout: 60000 });
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, action, output: output.slice(-500) }));
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const e = err as { stderr?: string; message?: string };
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: false, action, error: err.stderr?.slice(-500) || err.message }));
+        res.end(JSON.stringify({ success: false, action, error: e.stderr?.slice(-500) || e.message || 'Unknown error' }));
       }
       return;
     }
