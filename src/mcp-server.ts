@@ -5,7 +5,11 @@ import { z } from 'zod';
 import { ObsidianStore } from './core/obsidian-store.js';
 import { TaskManager } from './core/task-manager.js';
 import { recommendModel, listModels, type TaskType, type Complexity } from './core/model-selector.js';
-import { type AppConfig, getAgentDataPath } from './core/config.js';
+import { type AppConfig } from './core/config.js';
+import { PersonaLoader } from './personas/persona-loader.js';
+import { PersonaEngine } from './personas/persona-engine.js';
+import { PersonaSimulator } from './personas/persona-simulator.js';
+import { analyzeGoal } from './workflow/understand.js';
 import { createLogger } from './utils/logger.js';
 
 const log = createLogger('mcp-server');
@@ -22,7 +26,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
 
   const server = new McpServer({
     name: 'naedon-agent',
-    version: '0.1.0',
+    version: '0.2.0',
   });
 
   // Initialize core modules
@@ -30,6 +34,16 @@ export function createMcpServer(options: McpServerOptions): McpServer {
   const taskManager = new TaskManager({
     store,
     agentDataDir: config.AGENT_DATA_DIR,
+  });
+
+  // Initialize persona modules
+  const personaLoader = new PersonaLoader({
+    store,
+    personasDir: `${config.AGENT_DATA_DIR}/personas`,
+  });
+  const personaEngine = new PersonaEngine(personaLoader);
+  const personaSimulator = new PersonaSimulator({
+    ollamaUrl: config.OLLAMA_URL,
   });
 
   // ─── Tool: agent_status ───
@@ -45,7 +59,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
           type: 'text' as const,
           text: JSON.stringify({
             status: 'running',
-            version: '0.1.0',
+            version: '0.2.0',
             activeTask: activeTask ? { id: activeTask.id, title: activeTask.title } : null,
             obsidianVault: config.OBSIDIAN_VAULT_PATH,
             ollamaUrl: config.OLLAMA_URL,
@@ -180,7 +194,116 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     },
   );
 
-  log.info('MCP Server configured with 7 tools');
+  // ─── Tool: persona_list ───
+  server.tool(
+    'persona_list',
+    'List all available personas grouped by category',
+    {},
+    async () => {
+      log.debug('persona_list called');
+      const summary = await personaEngine.getPersonaSummary();
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify(summary, null, 2),
+        }],
+      };
+    },
+  );
+
+  // ─── Tool: persona_consult ───
+  server.tool(
+    'persona_consult',
+    'Consult personas for a given topic at a specific workflow stage',
+    {
+      stage: z.enum(['understand', 'prototype', 'validate', 'evolve', 'report']).describe('Current workflow stage'),
+      topic: z.string().describe('Topic to consult about'),
+      maxPersonas: z.number().optional().describe('Max number of personas to consult (default: 3)'),
+    },
+    async (params) => {
+      log.info('persona_consult called', params);
+      const plan = await personaEngine.createConsultationPlan({
+        stage: params.stage,
+        topic: params.topic,
+        maxPersonas: params.maxPersonas,
+      });
+
+      // If personas available and Ollama is up, run simulation
+      if (plan.consultations.length > 0) {
+        const health = await personaSimulator.healthCheck();
+        if (health.available) {
+          const results = await personaSimulator.runPlan(plan);
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify(results, null, 2),
+            }],
+          };
+        }
+        // Ollama not available — return prompts only
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              note: 'Ollama not available — returning prompts for manual review',
+              consultations: plan.consultations.map((c) => ({
+                persona: c.persona.name,
+                prompt: c.prompt,
+              })),
+            }, null, 2),
+          }],
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: 'No personas found for this stage/topic. Create personas first.',
+        }],
+      };
+    },
+  );
+
+  // ─── Tool: analyze_goal ───
+  server.tool(
+    'analyze_goal',
+    'Analyze a user goal and extract task type, complexity, and requirements',
+    {
+      goal: z.string().describe('User goal text'),
+      projectContext: z.string().optional().describe('Existing project context'),
+    },
+    async (params) => {
+      log.info('analyze_goal called', { goalLength: params.goal.length });
+      const result = analyzeGoal({
+        goal: params.goal,
+        projectContext: params.projectContext,
+      });
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify(result, null, 2),
+        }],
+      };
+    },
+  );
+
+  // ─── Tool: ollama_health ───
+  server.tool(
+    'ollama_health',
+    'Check if Ollama (local LLM) is running and list available models',
+    {},
+    async () => {
+      const health = await personaSimulator.healthCheck();
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify(health, null, 2),
+        }],
+      };
+    },
+  );
+
+  log.info('MCP Server configured with 11 tools');
   return server;
 }
 
