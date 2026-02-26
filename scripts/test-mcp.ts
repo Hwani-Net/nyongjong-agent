@@ -15,8 +15,8 @@ async function testMcpConnection(): Promise<void> {
       args: ['tsx', 'src/index.ts'],
       env: {
         ...process.env,
-        OBSIDIAN_VAULT_PATH: process.env.OBSIDIAN_VAULT_PATH || 'C:/Users/AIcreator/ObsidianVault',
-        AGENT_DATA_DIR: '뇽죵이Agent',
+        OBSIDIAN_VAULT_PATH: process.env.OBSIDIAN_VAULT_PATH || 'e:/Agent/뇽죵이Agent/data',
+        AGENT_DATA_DIR: '.',
         OLLAMA_URL: 'http://localhost:11434',
         LOG_LEVEL: 'warn',
         MCP_TRANSPORT: 'stdio',
