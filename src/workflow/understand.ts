@@ -45,27 +45,44 @@ export function analyzeGoal(input: UnderstandInput): UnderstandOutput {
   // Extract key signals from the goal text
   const hasUI = /ui|페이지|화면|컴포넌트|디자인|프론트/i.test(goal);
   const hasAPI = /api|엔드포인트|서버|백엔드|라우트/i.test(goal);
-  const hasBug = /버그|에러|오류|수정|안\s?[돼되]|문제/i.test(goal);
+  const hasBug = /버그|에러|오류|수정|안\s?[돼되]|문제|끊어|실패|깨/i.test(goal);
   const hasNew = /만들|생성|추가|새\s?[로운]|구현/i.test(goal);
-  const hasRefactor = /리팩|개선|정리|최적화|구조/i.test(goal);
+  const hasRefactor = /리팩|개선|정리|최적화|구조|분리|모듈/i.test(goal);
+  const hasStrategy = /전략|설계|아키텍처|비교|분석|수립|방향|로드맵/i.test(goal);
+  const hasDocumentation = /문서|README|가이드|트러블|설명|주석|CHANGELOG/i.test(goal);
+  const hasSimple = /확인|조회|목록|리스트|보여|알려/i.test(goal);
+  const hasExternalAPI = /카카오|네이버|구글|AWS|Firebase|Supabase|외부\s?API|연동/i.test(goal);
+  const hasMultiFile = /분리|여러\s?파일|모듈|마이크로서비스|독립|컴포넌트\s?분리/i.test(goal);
+  const hasMigration = /마이그레이션|전환|이전|업그레이드|포팅/i.test(goal);
 
-  // Determine task type
+  // Determine task type (priority: specific types first)
   let taskType = 'implementation';
-  if (hasBug) taskType = 'debugging';
-  else if (hasRefactor) taskType = 'refactoring';
-  else if (hasNew && hasUI && hasAPI) taskType = 'architecture';
-  else if (hasNew) taskType = 'implementation';
+  if (hasBug && !hasNew) taskType = 'debugging';
+  else if (hasStrategy) taskType = 'strategy';
+  else if (hasDocumentation && !hasNew && !hasAPI) taskType = 'documentation';
+  else if (hasRefactor && !hasNew) taskType = 'refactoring';
+  else if (hasSimple && !hasNew && !hasAPI && !hasUI) taskType = 'simple';
+  else if ((hasNew && hasUI && hasAPI) || hasMultiFile || hasMigration) taskType = 'architecture';
+  else if (hasNew || hasAPI) taskType = 'implementation';
 
-  // Estimate complexity
+  // Estimate complexity — expanded signal set
+  const wordCount = goal.split(/\s+/).length;
   const complexitySignals = [
-    hasUI && hasAPI, // Full-stack = higher complexity
-    (knowledgeItems?.length || 0) > 2, // Many related KIs = complex domain
-    goal.length > 200, // Long description = complex request
-    /\b(인증|결제|보안|실시간)\b/.test(goal), // Complex domain keywords
+    hasUI && hasAPI,                    // Full-stack
+    (knowledgeItems?.length || 0) > 2,  // Many related KIs
+    goal.length > 200,                  // Long description
+    wordCount > 30,                     // Many words = detailed request
+    /\b(인증|결제|보안|실시간|암호화|OAuth|JWT|WebSocket)\b/i.test(goal),
+    hasExternalAPI,                     // External API integration
+    hasMultiFile,                       // Multi-file changes
+    hasMigration,                       // Migration/transformation work
+    hasStrategy && hasAPI,              // Strategy + implementation = complex
+    taskType === 'architecture',        // Architecture tasks are inherently complex
   ].filter(Boolean).length;
 
-  const complexity = complexitySignals >= 3 ? 'critical'
-    : complexitySignals >= 2 ? 'high'
+  const complexity = complexitySignals >= 4 ? 'critical'
+    : complexitySignals >= 3 ? 'high'
+    : complexitySignals >= 2 ? 'medium'
     : complexitySignals >= 1 ? 'medium'
     : 'low';
 
@@ -77,6 +94,9 @@ export function analyzeGoal(input: UnderstandInput): UnderstandOutput {
   if (hasNew) {
     personaQuestions.push(`이 기능의 핵심 가치는 무엇이고, 사용자가 3초 안에 이해할 수 있을까요? 목표: ${goal}`);
   }
+  if (hasStrategy) {
+    personaQuestions.push(`이 전략의 기대 효과와 리스크를 비교 분석해주세요. 목표: ${goal}`);
+  }
   personaQuestions.push(`이 작업에서 가장 큰 리스크는 무엇일까요? 목표: ${goal}`);
 
   // Build key requirements from goal
@@ -86,16 +106,24 @@ export function analyzeGoal(input: UnderstandInput): UnderstandOutput {
   if (hasBug) keyRequirements.push('기존 버그 수정');
   if (hasNew) keyRequirements.push('새 기능 구현');
   if (hasRefactor) keyRequirements.push('코드 구조 개선');
+  if (hasStrategy) keyRequirements.push('전략/설계 수립');
+  if (hasDocumentation) keyRequirements.push('문서 작성/업데이트');
+  if (hasExternalAPI) keyRequirements.push('외부 API 연동');
 
   // Identify risks
   const risks: string[] = [];
   if (hasUI && hasAPI) risks.push('프론트-백 통합 복잡도');
   if (!projectContext) risks.push('프로젝트 컨텍스트 부족');
   if (complexitySignals >= 2) risks.push('높은 복잡도 — 단계별 검증 필요');
+  if (hasExternalAPI) risks.push('외부 API 의존성 — 장애 전파 가능');
+  if (hasMigration) risks.push('마이그레이션 — 기존 기능 회귀 위험');
 
-  const scope = projectContext ? '기존 프로젝트 확장' : '새 프로젝트';
+  // Scope: refactoring existing code is ALWAYS an existing project
+  const scope = (projectContext || hasRefactor || hasBug) ? '기존 프로젝트 확장' : '새 프로젝트';
   const nextAction = taskType === 'debugging'
     ? '버그 재현 → 원인 분석 → 수정'
+    : taskType === 'strategy' ? '요구사항 분석 → 대안 비교 → 전략 수립'
+    : taskType === 'documentation' ? '기존 문서 검토 → 추가 내용 작성'
     : '프로토타입 생성';
 
   const rawAnalysis = `Goal: ${goal}\nType: ${taskType}\nComplexity: ${complexity}\nScope: ${scope}\nRequirements: ${keyRequirements.join(', ')}\nRisks: ${risks.join(', ')}`;

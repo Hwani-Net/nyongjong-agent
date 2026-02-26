@@ -18,6 +18,20 @@ tasks:
       - documentation
       - readme
       - troubleshooting
+  - id: task-1772124817902-1a8alt
+    status: queued
+    createdAt: '2026-02-26T16:53:37.902Z'
+    updatedAt: '2026-02-26T16:53:37.902Z'
+    title: 대시보드 /health 엔드포인트 추가
+    description: >-
+      /health GET 엔드포인트 추가. status, version, uptime JSON 반환. 시니어 엔지니어 + 사용자 대변인
+      자문 반영.
+    priority: normal
+    tags:
+      - implementation
+      - health-check
+      - api
 ---
 - **[queued]** Phase 4 프론트엔드 개발 (high)
 - **[queued]** README 트러블슈팅 섹션 추가 (normal)
+- **[queued]** 대시보드 /health 엔드포인트 추가 (normal)
