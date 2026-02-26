@@ -98,6 +98,19 @@ describe('GapDetector', () => {
     // Should not have excessive total claims
     expect(result.claims.length).toBeLessThanOrEqual(4);
   });
+
+  it('should detect technology version claims', () => {
+    const result = detectGaps('Node.js 22 버전을 사용하고, React 19와 TypeScript 5.8을 적용했다.');
+    const techClaims = result.claims.filter(c => c.type === 'tech_version');
+    expect(techClaims.length).toBeGreaterThanOrEqual(2);
+    expect(techClaims.some(c => c.text.includes('Node'))).toBe(true);
+  });
+
+  it('should detect standalone version patterns like v2.0.1', () => {
+    const result = detectGaps('현재 v2.0.1이 최신 안정 버전입니다.');
+    const techClaims = result.claims.filter(c => c.type === 'tech_version');
+    expect(techClaims.length).toBeGreaterThanOrEqual(1);
+  });
 });
 
 describe('GroundingEngine', () => {

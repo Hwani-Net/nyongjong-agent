@@ -115,6 +115,8 @@ export class ObsidianStore {
    * Search notes for text matches in content or frontmatter.
    * Multi-word queries use AND logic — each word must appear somewhere in the note.
    * Single-word queries use simple substring matching.
+   * Punctuation is stripped before matching so "MCP," matches "MCP".
+   * File paths are included in the searchable text.
    */
   async searchNotes(relativeDir: string, query: string): Promise<NoteData[]> {
     log.debug(`Searching for "${query}" in ${relativeDir}`);
@@ -122,13 +124,20 @@ export class ObsidianStore {
     const allNotes = await this.listNotes(relativeDir, true);
     const results: NoteData[] = [];
 
-    // Split query into individual tokens for AND matching
-    const tokens = query.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+    // Strip punctuation from query tokens for fuzzy matching
+    const tokens = query
+      .toLowerCase()
+      .split(/\s+/)
+      .map(t => t.replace(/[.,;:!?'"()\[\]{}<>]/g, ''))
+      .filter(t => t.length > 0);
 
     for (const notePath of allNotes) {
       try {
         const note = await this.readNote(notePath);
-        const searchable = `${JSON.stringify(note.frontmatter)} ${note.content}`.toLowerCase();
+        // Include file path in searchable text so filename keywords also match
+        const raw = `${notePath} ${JSON.stringify(note.frontmatter)} ${note.content}`;
+        // Strip punctuation from searchable text too for consistent matching
+        const searchable = raw.toLowerCase().replace(/[.,;:!?'"()\[\]{}<>]/g, ' ');
 
         // AND matching: every token must appear in the searchable text
         const allMatch = tokens.every(token => searchable.includes(token));

@@ -82,4 +82,26 @@ describe('ObsidianStore', () => {
     const notes = await store.listNotes('nope');
     expect(notes).toEqual([]);
   });
+
+  it('should search English keywords with surrounding punctuation', async () => {
+    await store.writeNote('search/keywords.md', 'Keywords: TypeScript, Node.js, MCP, Obsidian, JWT');
+    await store.writeNote('search/unrelated.md', 'No matching content here.');
+
+    // "MCP" appears as "MCP," with trailing comma — should still match after punctuation stripping
+    const results = await store.searchNotes('search', 'MCP');
+    expect(results).toHaveLength(1);
+    expect(results[0].path).toBe('search/keywords.md');
+
+    // Multi-word AND with punctuation: "TypeScript" and "JWT" both appear
+    const multi = await store.searchNotes('search', 'TypeScript JWT');
+    expect(multi).toHaveLength(1);
+  });
+
+  it('should match file path keywords in search', async () => {
+    await store.writeNote('notes/api-keys-issued.md', 'KOSIS key issued.');
+
+    // Searching for "api-keys" should match via file path
+    const results = await store.searchNotes('notes', 'api-keys');
+    expect(results).toHaveLength(1);
+  });
 });

@@ -7,7 +7,7 @@ export interface FactualClaim {
   /** The text containing the claim */
   text: string;
   /** Type of claim — matches design doc Section 6.1 */
-  type: 'statistic' | 'date' | 'name' | 'regulation' | 'price' | 'trend' | 'user_behavior' | 'competitor' | 'general';
+  type: 'statistic' | 'date' | 'name' | 'regulation' | 'price' | 'trend' | 'user_behavior' | 'competitor' | 'tech_version' | 'general';
   /** Confidence that this needs grounding (0-1) */
   groundingNeed: number;
   /** Suggested data source */
@@ -205,9 +205,9 @@ export function detectGaps(text: string): GapAnalysis {
     for (const match of matches) {
       claims.push({
         text: match[0],
-        type: 'general',
-        groundingNeed: 0.7,
-        suggestedSource: '공식 문서/GitHub Releases',
+        type: 'tech_version',
+        groundingNeed: 0.8,
+        suggestedSource: 'Naver 검색/공식 문서/GitHub Releases',
       });
     }
   }

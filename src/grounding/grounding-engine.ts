@@ -58,6 +58,7 @@ export interface GroundingEngineOptions {
  *   - trend → Google Trends
  *   - user_behavior → App Reviews
  *   - competitor → Web Scraper + Naver
+ *   - tech_version → Naver Search + Web Scraper
  *   - general → Web Scraper fallback
  */
 export class GroundingEngine {
@@ -179,6 +180,15 @@ export class GroundingEngine {
       }
       case 'competitor': {
         // Try Naver first, fall back to web scraper
+        if (this.naver.isConfigured()) {
+          const result = await this.naver.searchNews(claim.text);
+          return { ...result, source: result.source };
+        }
+        const result = await this.webScraper.search(claim.text);
+        return { ...result, source: result.source };
+      }
+      case 'tech_version': {
+        // Technology version claims — Naver search for Korean tech news/docs
         if (this.naver.isConfigured()) {
           const result = await this.naver.searchNews(claim.text);
           return { ...result, source: result.source };
