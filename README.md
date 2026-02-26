@@ -2,7 +2,7 @@
 
 > AI-native 자율 에이전트 서버 — MCP 프로토콜, Obsidian 메모리, 멀티 모델, 페르소나 시스템
 
-![Tests](https://img.shields.io/badge/tests-169%2F169-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-core_95%25+-blue) ![v0.4.0](https://img.shields.io/badge/version-0.4.0-green)
+![Tests](https://img.shields.io/badge/tests-173%2F173-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-core_95%25+-blue) ![v0.4.0](https://img.shields.io/badge/version-0.4.0-green)
 
 ## Quick Start
 
