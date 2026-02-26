@@ -74,9 +74,9 @@ export function analyzeGoal(input: UnderstandInput): UnderstandOutput {
 
   // Determine task type (priority: specific types first)
   let taskType = 'implementation';
-  if (hasBug && !hasNew) taskType = 'debugging';
+  if (hasDocumentation && !hasNew && !hasAPI) taskType = 'documentation';
+  else if (hasBug && !hasNew && !hasDocumentation) taskType = 'debugging';
   else if (hasStrategy) taskType = 'strategy';
-  else if (hasDocumentation && !hasNew && !hasAPI) taskType = 'documentation';
   else if (hasRefactor && !hasNew) taskType = 'refactoring';
   else if (hasSimple && !hasNew && !hasAPI && !hasUI) taskType = 'simple';
   else if ((hasNew && hasUI && hasAPI) || hasMultiFile || hasMigration) taskType = 'architecture';

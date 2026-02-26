@@ -43,7 +43,7 @@ const DATE_PATTERNS = [
 const REGULATION_PATTERNS = [
   /법률? *제? *\d+/gi,
   /시행령|시행규칙|고시|훈령/gi,
-  /[\uAC00-\uD7A3]+법[^\uAC00-\uD7A3]/gi,
+  /[\uAC00-\uD7A3]+법(?=[에의을를은는이가과와도]|$|\s|[,.])/gi,
 ];
 
 const PRICE_PATTERNS = [
