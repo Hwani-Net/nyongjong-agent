@@ -40,7 +40,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
 
   const server = new McpServer({
     name: 'nongjong-agent',
-    version: '0.3.0',
+    version: '0.4.0',
   });
 
   // ─── Tool Registry (runtime toggle) ───
@@ -124,7 +124,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
           type: 'text' as const,
           text: JSON.stringify({
             status: 'running',
-            version: '0.3.0',
+            version: '0.4.0',
             activeTask: activeTask ? { id: activeTask.id, title: activeTask.title } : null,
             obsidianVault: config.OBSIDIAN_VAULT_PATH,
             ollamaUrl: config.OLLAMA_URL,

@@ -445,7 +445,7 @@ body {
       </div>
     </nav>
     <div class="sidebar-footer">
-      <span style="font-size:0.75rem; color:var(--text-secondary)">v0.3.0</span>
+      <span style="font-size:0.75rem; color:var(--text-secondary)">v0.4.0</span>
       <button class="btn" onclick="toggleTheme()" style="padding:0.375rem 0.625rem">🌗</button>
     </div>
   </aside>
