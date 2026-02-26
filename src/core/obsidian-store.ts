@@ -112,21 +112,27 @@ export class ObsidianStore {
   }
 
   /**
-   * Search notes for simple text matches in content or frontmatter.
-   * Returns matching note paths.
+   * Search notes for text matches in content or frontmatter.
+   * Multi-word queries use AND logic — each word must appear somewhere in the note.
+   * Single-word queries use simple substring matching.
    */
   async searchNotes(relativeDir: string, query: string): Promise<NoteData[]> {
     log.debug(`Searching for "${query}" in ${relativeDir}`);
 
     const allNotes = await this.listNotes(relativeDir, true);
     const results: NoteData[] = [];
-    const lowerQuery = query.toLowerCase();
+
+    // Split query into individual tokens for AND matching
+    const tokens = query.toLowerCase().split(/\s+/).filter(t => t.length > 0);
 
     for (const notePath of allNotes) {
       try {
         const note = await this.readNote(notePath);
         const searchable = `${JSON.stringify(note.frontmatter)} ${note.content}`.toLowerCase();
-        if (searchable.includes(lowerQuery)) {
+
+        // AND matching: every token must appear in the searchable text
+        const allMatch = tokens.every(token => searchable.includes(token));
+        if (allMatch) {
           results.push(note);
         }
       } catch (err) {
@@ -134,7 +140,7 @@ export class ObsidianStore {
       }
     }
 
-    log.info(`Search found ${results.length} matches for "${query}"`);
+    log.info(`Search found ${results.length} matches for "${query}" (${tokens.length} tokens)`);
     return results;
   }
 
