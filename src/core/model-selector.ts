@@ -111,8 +111,8 @@ export function recommendModel(input: SelectionInput): ModelRecommendation {
     // Complexity range match (+2)
     if (profile.complexityRange.includes(complexity)) score += 2;
 
-    // Budget constraint penalty (-1 per cost tier)
-    if (budgetConstrained) score -= profile.costTier;
+    // Budget constraint penalty — stronger penalty to force downgrade
+    if (budgetConstrained) score -= Math.ceil(profile.costTier * 1.5);
 
     // Prefer not to over-provision: penalize if model is too powerful for the task
     const complexityNum = COMPLEXITY_ORDER[complexity];
