@@ -1,6 +1,8 @@
-# 🐾 뇽죵이 Agent
+# 🐾 뇽죵이 Agent v0.4.0
 
 > AI-native 자율 에이전트 서버 — MCP 프로토콜, Obsidian 메모리, 멀티 모델, 페르소나 시스템
+
+![Tests](https://img.shields.io/badge/tests-138%2F138-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-core_95%25+-blue) ![v0.4.0-rc1](https://img.shields.io/badge/version-0.4.0--rc1-orange)
 
 ## Quick Start
 
@@ -11,7 +13,8 @@ cp .env.example .env    # 경로 설정
 npm start               # MCP 서버 (Antigravity 자동 연결)
 npm run dashboard       # 대시보드 → http://localhost:3100
 npm run test:mcp        # MCP 연결 검증
-npm test                # 유닛 테스트 (70/70)
+npm test                # 유닛 테스트 (138/138)
+npm run test:coverage   # 커버리지 리포트
 ```
 
 ## Architecture
@@ -79,7 +82,7 @@ npm test                # 유닛 테스트 (70/70)
 - 🎨 글래시 디자인 + CSS 애니메이션
 - 📱 반응형 쉘 레이아웃 (260px 사이드바)
 
-## MCP Tools (13)
+## MCP Tools (15)
 
 | Tool | Description |
 |------|-------------|
@@ -154,7 +157,7 @@ src/
     └── logger.ts         # Structured logging
 
 data/personas/            # Default persona definitions (6)
-tests/                    # 70 unit tests
+tests/                    # 138 unit tests (13 files)
 scripts/test-mcp.ts       # MCP connection verifier
 ```
 
