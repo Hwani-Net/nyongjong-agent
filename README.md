@@ -35,12 +35,49 @@ npm test                # 유닛 테스트 (51/51)
              ┌──────────┐                          │ CycleRunner  │
              │ Grounding│      ┌──────────────┐    └──────────────┘
              │ ─────── │      │  Execution   │
-             │ GapDetect│      │ ──────────── │
-             │ API Conn │      │ Shell        │
-             │ Engine   │      │ Git Worktree │
-             └──────────┘      │ Test Runner  │
-                               └──────────────┘
+             │ GapDetect│      │ ──────────── │    ┌──────────────┐
+             │ API Conn │      │ Shell        │    │  Dashboard   │
+             │ Engine   │      │ Git Worktree │    │ ──────────── │
+             └──────────┘      │ Test Runner  │    │ 10-page UI   │
+                               └──────────────┘    │ SSE realtime │
+                                                   │ REST API     │
+                                                   └──────────────┘
 ```
+
+## 📊 Dashboard (10 Pages)
+
+실시간 에이전트 모니터링 대시보드 — `http://localhost:3100`
+
+| # | Page | Description |
+|---|------|-------------|
+| 1 | 📊 **Dashboard** | 6 KPI 카드 + Task Queue 실시간 |
+| 2 | 📋 **Kanban** | 6단계 AI 순환 워크플로우 보드 |
+| 3 | 🔧 **Tool Registry** | 8그룹 15도구 상태 모니터링 |
+| 4 | 🎭 **Personas** | 6개 페르소나 카테고리별 그리드 |
+| 5 | 💬 **Chat** | 대표님 ↔ 에이전트 대화 인터페이스 |
+| 6 | 🎮 **Office** | 에이전트 오피스 뷰 (역할별 데스크) |
+| 7 | 🖥️ **Terminal** | Build/Test/Lint 원클릭 실행 |
+| 8 | 📨 **Decision Inbox** | 승인/반려 판단 게이트 |
+| 9 | ⚙️ **Settings** | 모델/Ollama/API키/Vault 설정 |
+| 10 | 📝 **Event Log** | SSE 실시간 이벤트 기록 |
+
+### Dashboard API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/` | Dashboard HTML |
+| `GET` | `/events` | SSE 실시간 스트림 |
+| `GET` | `/api/status` | JSON 상태 응답 |
+| `POST` | `/api/action/build` | npm run build 실행 |
+| `POST` | `/api/action/test` | npm test 실행 |
+| `POST` | `/api/action/lint` | npx tsc --noEmit 실행 |
+
+### Features
+
+- 🌗 라이트/다크 테마 토글
+- 📡 SSE 5초 주기 실시간 업데이트
+- 🎨 글래시 디자인 + CSS 애니메이션
+- 📱 반응형 쉘 레이아웃 (260px 사이드바)
 
 ## MCP Tools (13)
 
@@ -112,7 +149,7 @@ src/
 │   ├── git-worktree.ts   # Git isolation
 │   └── test-runner.ts    # vitest + tsc
 ├── dashboard/
-│   └── server.ts         # HTTP + SSE dashboard
+│   └── server.ts         # HTTP + SSE dashboard (10-page UI)
 └── utils/
     └── logger.ts         # Structured logging
 

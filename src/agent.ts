@@ -98,6 +98,13 @@ export async function getAgentStatus(modules: AgentModules, config: AppConfig): 
   const ollamaHealth = await modules.ollamaClient.healthCheck();
   const activeTask = await modules.taskManager.getActiveTask();
   const adapterStatus = modules.groundingEngine.getAdapterStatus();
+  const taskQueue = await modules.taskManager.getQueue();
+
+  // Persona summary
+  let personaSummary: Record<string, string[]> = {};
+  try {
+    personaSummary = await modules.personaEngine.getPersonaSummary();
+  } catch { /* personas may not be loaded yet */ }
 
   return {
     version: '0.3.0',
@@ -108,6 +115,21 @@ export async function getAgentStatus(modules: AgentModules, config: AppConfig): 
       grounding: { adapters: adapterStatus },
       workflow: { status: modules.cycleRunner.getState().status },
     },
-    activeTask: activeTask ? { id: activeTask.id, title: activeTask.title } : null,
+    activeTask: activeTask ? { id: activeTask.id, title: activeTask.title, status: activeTask.status } : null,
+    taskQueue: taskQueue.map(t => ({ id: t.id, title: t.title, status: t.status, priority: t.priority })),
+    personas: personaSummary,
+    toolGroups: {
+      core: { enabled: ['agent_status', 'tool_toggle', 'tool_status'], disabled: [] },
+      task: { enabled: ['task_list', 'task_create'], disabled: [] },
+      model: { enabled: ['recommend_model', 'list_models'], disabled: [] },
+      memory: { enabled: ['memory_search', 'memory_write'], disabled: [] },
+      persona: { enabled: ['persona_list', 'persona_consult'], disabled: [] },
+      workflow: { enabled: ['analyze_goal', 'run_cycle'], disabled: [] },
+      advisory: { enabled: ['ollama_health'], disabled: [] },
+      grounding: { enabled: ['ground_check'], disabled: [] },
+    },
+    ollamaStatus: ollamaHealth.available ? 'Connected' : 'Offline',
+    ollamaModels: ollamaHealth.models || [],
+    vaultPath: config.OBSIDIAN_VAULT_PATH || 'Not configured',
   };
 }
