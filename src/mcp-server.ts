@@ -10,6 +10,10 @@ import { PersonaLoader } from './personas/persona-loader.js';
 import { PersonaEngine } from './personas/persona-engine.js';
 import { PersonaSimulator } from './personas/persona-simulator.js';
 import { analyzeGoal } from './workflow/understand.js';
+import { GroundingEngine } from './grounding/grounding-engine.js';
+import { ApiConnector } from './grounding/api-connector.js';
+import { CycleRunner } from './workflow/cycle-runner.js';
+import { ShellRunner } from './execution/shell-runner.js';
 import { createLogger } from './utils/logger.js';
 
 const log = createLogger('mcp-server');
@@ -44,6 +48,18 @@ export function createMcpServer(options: McpServerOptions): McpServer {
   const personaEngine = new PersonaEngine(personaLoader);
   const personaSimulator = new PersonaSimulator({
     ollamaUrl: config.OLLAMA_URL,
+  });
+
+  // Initialize grounding
+  const apiConnector = new ApiConnector();
+  const groundingEngine = new GroundingEngine({ apiConnector });
+
+  // Initialize workflow
+  const shellRunner = new ShellRunner();
+  const cycleRunner = new CycleRunner({
+    maxRetries: 3,
+    projectRoot: process.cwd(),
+    runShell: (cmd, cwd) => shellRunner.run(cmd, cwd),
   });
 
   // ─── Tool: agent_status ───
@@ -303,7 +319,41 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     },
   );
 
-  log.info('MCP Server configured with 11 tools');
+  // ─── Tool: ground_check ───
+  server.tool(
+    'ground_check',
+    'Detect factual claims in text and verify them via external APIs',
+    {
+      text: z.string().describe('Text to analyze for factual claims'),
+      verifyApi: z.boolean().optional().describe('If true, also call APIs to verify claims (default: false — quick check only)'),
+    },
+    async (params) => {
+      log.info('ground_check called', { textLength: params.text.length });
+      if (params.verifyApi) {
+        const result = await groundingEngine.ground(params.text);
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+      }
+      const analysis = groundingEngine.quickCheck(params.text);
+      return { content: [{ type: 'text' as const, text: JSON.stringify(analysis, null, 2) }] };
+    },
+  );
+
+  // ─── Tool: run_cycle ───
+  server.tool(
+    'run_cycle',
+    'Run the full AI circular workflow (Understand→Prototype→Validate→Evolve→Report) for a goal',
+    {
+      goal: z.string().describe('The goal to execute'),
+      projectContext: z.string().optional().describe('Existing project context'),
+    },
+    async (params) => {
+      log.info('run_cycle called', { goal: params.goal.slice(0, 80) });
+      const report = await cycleRunner.run({ goal: params.goal, projectContext: params.projectContext });
+      return { content: [{ type: 'text' as const, text: report.markdown }] };
+    },
+  );
+
+  log.info('MCP Server configured with 13 tools');
   return server;
 }
 
