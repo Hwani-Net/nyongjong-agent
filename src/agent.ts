@@ -107,7 +107,17 @@ export async function getAgentStatus(modules: AgentModules, config: AppConfig): 
   } catch { /* personas may not be loaded yet */ }
 
   return {
-    version: '0.3.0',
+    version: '0.4.0',
+    enabledTools: Object.values({
+      core: ['agent_status', 'tool_toggle', 'tool_status'],
+      task: ['task_list', 'task_create'],
+      model: ['recommend_model', 'list_models'],
+      memory: ['memory_search', 'memory_write'],
+      persona: ['persona_list', 'persona_consult'],
+      workflow: ['analyze_goal', 'run_cycle'],
+      advisory: ['ollama_health'],
+      grounding: ['ground_check'],
+    }).flat(),
     status: 'running',
     modules: {
       obsidian: { connected: true, vault: config.OBSIDIAN_VAULT_PATH },

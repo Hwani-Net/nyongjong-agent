@@ -1,6 +1,6 @@
 {
   "name": "naedon-agent",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "뇽죵이 에이전트 — AI-native autonomous agent server with MCP, Obsidian memory, and multi-model support",
   "type": "module",
   "main": "src/index.ts",

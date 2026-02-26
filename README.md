@@ -11,7 +11,7 @@ cp .env.example .env    # 경로 설정
 npm start               # MCP 서버 (Antigravity 자동 연결)
 npm run dashboard       # 대시보드 → http://localhost:3100
 npm run test:mcp        # MCP 연결 검증
-npm test                # 유닛 테스트 (51/51)
+npm test                # 유닛 테스트 (70/70)
 ```
 
 ## Architecture
@@ -154,7 +154,7 @@ src/
     └── logger.ts         # Structured logging
 
 data/personas/            # Default persona definitions (6)
-tests/                    # 51 unit tests
+tests/                    # 70 unit tests
 scripts/test-mcp.ts       # MCP connection verifier
 ```
 

@@ -361,6 +361,12 @@ body {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+.typing-dots { animation: typingPulse 1.2s ease-in-out infinite; color: var(--text-secondary); }
+@keyframes typingPulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+.chat-bubble.typing { background: var(--surface-alt); border: 1px dashed var(--border); }
 
 /* Office View */
 .office-container {
@@ -662,22 +668,30 @@ function showPage(page) {
 }
 
 // Chat panel
-function sendChat() {
+async function sendChat() {
   const input = document.getElementById('chatInput');
   const msg = input.value.trim();
   if (!msg) return;
   input.value = '';
   addChatBubble(msg, 'user', '👤 대표님');
-  setTimeout(() => {
-    const responses = [
-      '알겠습니다 대표님! 분석 중입니다... 🤔',
-      '해당 작업을 태스크 큐에 추가했습니다. 📝',
-      '페르소나 자문을 진행하겠습니다. 🎭',
-      '빌드 결과를 확인 중입니다... 🔨',
-      '그라운딩 데이터를 검색하겠습니다. 🔍',
-    ];
-    addChatBubble(responses[Math.floor(Math.random() * responses.length)], 'agent', '🐾 뇽죵이');
-  }, 800);
+  const typing = document.createElement('div');
+  typing.className = 'chat-bubble agent typing';
+  typing.innerHTML = '<div class="sender">🐾 뇽죵이</div><span class="typing-dots">●●●</span>';
+  document.getElementById('chatMessages').appendChild(typing);
+  try {
+    const resp = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg }),
+    });
+    const data = await resp.json();
+    typing.remove();
+    addChatBubble(data.reply || '응답을 생성하지 못했습니다.', 'agent', '🐾 뇽죵이');
+    if (data.action) addLog('Chat action: ' + data.action);
+  } catch {
+    typing.remove();
+    addChatBubble('서버 연결에 실패했습니다. 다시 시도해주세요. 🔌', 'agent', '🐾 뇽죵이');
+  }
 }
 function addChatBubble(text, role, sender) {
   const area = document.getElementById('chatMessages');
@@ -688,8 +702,8 @@ function addChatBubble(text, role, sender) {
   area.scrollTop = area.scrollHeight;
 }
 
-// Office view
-const officeDesks = [
+// Office view — syncs with SSE persona data
+let officeDesks = [
   { emoji: '🐾', name: '뇽죵이', role: 'CEO Agent', status: 'active' },
   { emoji: '💼', name: 'CEO Naedon', role: 'Business', status: 'idle' },
   { emoji: '🤔', name: 'Philosopher', role: 'Advisor', status: 'idle' },
@@ -697,6 +711,20 @@ const officeDesks = [
   { emoji: '🔒', name: 'Auditor', role: 'Security', status: 'idle' },
   { emoji: '👤', name: 'User Advocate', role: 'Customer', status: 'idle' },
 ];
+function updateOfficeFromSSE(data) {
+  const stage = data.activeTask?.stage || '';
+  const stagePersonaMap = {
+    understand: ['CEO Naedon', 'User Advocate', 'Philosopher'],
+    prototype: ['Engineer'],
+    validate: ['Engineer', 'Auditor', 'User Advocate'],
+    evolve: ['Engineer', 'Auditor', 'Philosopher'],
+    report: ['CEO Naedon'],
+  };
+  const activeNames = stagePersonaMap[stage] || [];
+  officeDesks.forEach(d => {
+    d.status = d.name === '뇽죵이' ? 'active' : (activeNames.includes(d.name) ? 'active' : 'idle');
+  });
+}
 function renderOffice() {
   const grid = document.getElementById('officeGrid');
   grid.innerHTML = officeDesks.map(d => {
@@ -932,16 +960,28 @@ function updateDashboard(data) {
 
 // SSE connection
 const evtSource = new EventSource('/events');
+evtSource.onopen = () => {
+  document.getElementById('statusBadge').className = 'badge badge-green';
+  document.getElementById('statusBadge').innerHTML = '<span class="pulse">●</span> Connected';
+  addLog('SSE connected');
+};
 evtSource.onmessage = (e) => {
-  try { updateDashboard(JSON.parse(e.data)); } catch {}
+  try {
+    const data = JSON.parse(e.data);
+    updateDashboard(data);
+    updateOfficeFromSSE(data);
+    if (document.querySelector('[data-page="office"].active')) renderOffice();
+    document.getElementById('statusBadge').className = 'badge badge-green';
+    document.getElementById('statusBadge').innerHTML = '<span class="pulse">●</span> Connected';
+  } catch {}
 };
 evtSource.onerror = () => {
   document.getElementById('statusBadge').className = 'badge badge-red';
   document.getElementById('statusBadge').innerHTML = '● Disconnected';
-  addLog('Connection lost');
+  addLog('Connection lost — auto-reconnecting...');
 };
 
-addLog('Dashboard loaded');
+addLog('Dashboard v0.4.0 loaded');
 renderDecisions();
 </script>
 </body>
@@ -1007,6 +1047,59 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: false, action, error: err.stderr?.slice(-500) || err.message }));
       }
+      return;
+    }
+
+    // Chat API endpoint
+    if (url === '/api/chat' && req.method === 'POST') {
+      let body = '';
+      req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+      req.on('end', async () => {
+        try {
+          const { message } = JSON.parse(body);
+          const lowerMsg = (message || '').toLowerCase();
+          let reply = '';
+          let action = '';
+
+          // Smart routing based on message intent
+          if (lowerMsg.includes('상태') || lowerMsg.includes('status')) {
+            const status = await getAgentStatus(modules, config);
+            reply = `현재 상태입니다:\n• 서버: ${status.status}\n• 도구: ${(status.enabledTools as string[] || []).length}개 활성\n• 태스크 큐: ${(status.taskQueue as unknown[] || []).length}건\n• Ollama: ${status.ollamaStatus || 'N/A'}\n• 버전: v${status.version}`;
+            action = 'status_check';
+          } else if (lowerMsg.includes('빌드') || lowerMsg.includes('build')) {
+            reply = '빌드를 시작합니다! Terminal 페이지에서 진행상황을 확인하세요. 🔨';
+            action = 'build_triggered';
+          } else if (lowerMsg.includes('테스트') || lowerMsg.includes('test')) {
+            reply = '테스트를 실행합니다! Terminal 페이지에서 결과를 확인하세요. 🧪';
+            action = 'test_triggered';
+          } else if (lowerMsg.includes('페르소나') || lowerMsg.includes('persona')) {
+            const personas = await modules.personaLoader.loadAll();
+            reply = `현재 ${personas.length}개 페르소나가 등록되어 있습니다:\n${personas.map((p: { name: string; category: string }) => `• ${p.name} (${p.category})`).join('\n')}`;
+            action = 'persona_list';
+          } else if (lowerMsg.includes('태스크') || lowerMsg.includes('task') || lowerMsg.includes('할일')) {
+            const tasks = await modules.taskManager.getQueue();
+            reply = tasks.length > 0
+              ? `현재 ${tasks.length}개 태스크가 있습니다:\n${tasks.slice(0, 5).map((t: { status: string; title: string }) => `• [${t.status}] ${t.title}`).join('\n')}`
+              : '현재 태스크 큐가 비어 있습니다. 새 태스크를 추가해보세요! 📝';
+            action = 'task_list';
+          } else if (lowerMsg.includes('모델') || lowerMsg.includes('model')) {
+            reply = '사용 가능한 모델 목록:\n• Gemini 3.1 Pro (High) — 복잡한 설계\n• Gemini 3.1 Pro (Low) — 구현/리팩터링\n• Gemini 3 Flash — 빠른 단순 작업\n• Claude Sonnet 4.6 — 논리적 추론\n• Claude Opus 4.6 — 최고 난이도\n• GPT-OSS 120B — 범용';
+            action = 'model_list';
+          } else if (lowerMsg.includes('도움') || lowerMsg.includes('help') || lowerMsg.includes('뭐')) {
+            reply = '사용 가능한 명령어:\n• "상태" — 에이전트 상태 확인\n• "빌드" — 프로젝트 빌드\n• "테스트" — 테스트 실행\n• "페르소나" — 페르소나 목록\n• "태스크" — 태스크 큐 조회\n• "모델" — AI 모델 목록\n\n자유롭게 질문해주세요! 🐾';
+            action = 'help';
+          } else {
+            reply = `"${message}" — 알겠습니다 대표님! 해당 내용을 분석하고 처리하겠습니다. 🤔\n\n팁: "상태", "빌드", "페르소나", "태스크", "모델" 등의 키워드를 사용하면 더 정확한 응답을 받을 수 있습니다.`;
+            action = 'general_response';
+          }
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ reply, action, timestamp: new Date().toISOString() }));
+        } catch {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ reply: '메시지 파싱에 실패했습니다.', action: 'error' }));
+        }
+      });
       return;
     }
 
