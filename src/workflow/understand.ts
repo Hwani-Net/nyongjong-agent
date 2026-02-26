@@ -42,6 +42,23 @@ export function analyzeGoal(input: UnderstandInput): UnderstandOutput {
   const { goal, projectContext, knowledgeItems } = input;
   log.info('Analyzing goal', { goalLength: goal.length });
 
+  // Guard: empty or whitespace-only goal
+  if (!goal.trim()) {
+    log.warn('Empty goal received');
+    return {
+      analysis: {
+        taskType: 'simple',
+        complexity: 'low',
+        scope: '새 프로젝트',
+        keyRequirements: [],
+        risks: ['빈 목표 — 추가 정보 필요'],
+      },
+      personaQuestions: [],
+      nextAction: '목표 명확화 필요',
+      rawAnalysis: 'Goal: (empty)\nType: simple\nComplexity: low',
+    };
+  }
+
   // Extract key signals from the goal text
   const hasUI = /ui|페이지|화면|컴포넌트|디자인|프론트/i.test(goal);
   const hasAPI = /api|엔드포인트|서버|백엔드|라우트/i.test(goal);
@@ -78,12 +95,14 @@ export function analyzeGoal(input: UnderstandInput): UnderstandOutput {
     hasMigration,                       // Migration/transformation work
     hasStrategy && hasAPI,              // Strategy + implementation = complex
     taskType === 'architecture',        // Architecture tasks are inherently complex
+    /i18n|다국어|localization|번역|intl/i.test(goal),  // i18n = cross-cutting complexity
+    // Multi-system integration (3+ distinct techs/services mentioned)
+    (goal.match(/\b(Next\.?js|React|Vue|Svelte|Express|Flask|Django|Supabase|Firebase|Stripe|Redis|Docker|K8s|PostgreSQL|MongoDB|GraphQL|gRPC|WebSocket|Prisma)\b/gi) || []).length >= 3,
   ].filter(Boolean).length;
 
   const complexity = complexitySignals >= 4 ? 'critical'
     : complexitySignals >= 3 ? 'high'
     : complexitySignals >= 2 ? 'medium'
-    : complexitySignals >= 1 ? 'medium'
     : 'low';
 
   // Generate persona questions

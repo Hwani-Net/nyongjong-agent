@@ -31,7 +31,29 @@ tasks:
       - implementation
       - health-check
       - api
+  - id: task-1772126948878-zzbe5t
+    status: queued
+    createdAt: '2026-02-26T17:29:08.878Z'
+    updatedAt: '2026-02-26T17:29:08.878Z'
+    title: Redis 캐시 레이어 구축
+    description: Docker Compose로 Redis 캐시 레이어 추가
+    priority: high
+    tags:
+      - infrastructure
+      - cache
+  - id: task-1772126948926-f2ljqq
+    status: queued
+    createdAt: '2026-02-26T17:29:08.926Z'
+    updatedAt: '2026-02-26T17:29:08.926Z'
+    title: Monitoring Stack 구축
+    description: Prometheus + Grafana로 서비스 모니터링 구축
+    priority: normal
+    tags:
+      - monitoring
+      - devops
 ---
 - **[queued]** Phase 4 프론트엔드 개발 (high)
 - **[queued]** README 트러블슈팅 섹션 추가 (normal)
 - **[queued]** 대시보드 /health 엔드포인트 추가 (normal)
+- **[queued]** Redis 캐시 레이어 구축 (high)
+- **[queued]** Monitoring Stack 구축 (normal)

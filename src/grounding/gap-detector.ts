@@ -212,7 +212,7 @@ export function detectGaps(text: string): GapAnalysis {
     }
   }
 
-  // Deduplicate by text
+  // Deduplicate by text (exact match)
   const unique = new Map<string, FactualClaim>();
   for (const claim of claims) {
     const key = claim.text.trim();
@@ -221,7 +221,24 @@ export function detectGaps(text: string): GapAnalysis {
     }
   }
 
-  const uniqueClaims = Array.from(unique.values());
+  // Remove substring overlaps — if "약 5" and "5조" both exist and refer to the
+  // same token in the original text, keep only the longer/more specific match.
+  const deduped: FactualClaim[] = [];
+  const sorted = Array.from(unique.values()).sort((a, b) => b.text.length - a.text.length);
+  for (const claim of sorted) {
+    const isSubstringOfExisting = deduped.some(existing => existing.text.includes(claim.text));
+    const containsSameNumberToken = deduped.some(existing => {
+      // Extract core number from both
+      const numA = claim.text.replace(/[^\d.]/g, '');
+      const numB = existing.text.replace(/[^\d.]/g, '');
+      return numA.length > 0 && numA === numB && claim.type === existing.type;
+    });
+    if (!isSubstringOfExisting && !containsSameNumberToken) {
+      deduped.push(claim);
+    }
+  }
+
+  const uniqueClaims = deduped;
   const overallScore = uniqueClaims.length > 0
     ? uniqueClaims.reduce((sum, c) => sum + c.groundingNeed, 0) / uniqueClaims.length
     : 0;
