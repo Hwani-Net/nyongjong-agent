@@ -28,9 +28,9 @@ export interface GapAnalysis {
 // Patterns that indicate factual claims needing verification
 const STAT_PATTERNS = [
   /(\d+(?:\.\d+)?)\s*(%|percent|퍼센트)/gi,
-  /(\d{1,3}(?:,\d{3})*)\s*(명|건|원|개|대|달러|만|억|조)/gi,
-  /(\d{4,})\s*(명|건|원|개|대|달러|만|억|조|개|위)/gi,  // 4+ digit numbers
-  /약\s*\d+/gi,
+  /([1-9]\d{0,2}(?:,\d{3})*)\s*(명|건|원|개|대|달러|만|억|조)/gi,    // 1-999 with comma groups
+  /([1-9]\d{3,})\s*(명|건|원|개|대|달러|만|억|조|위)/gi,             // 1000+ numbers
+  /약\s*[1-9]\d*/gi,
   /전년\s*(대비|비)\s*\d+/gi,
 ];
 
