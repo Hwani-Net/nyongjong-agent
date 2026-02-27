@@ -1,5 +1,6 @@
 // Workflow stage 1: Understand — goal analysis + persona consultation
 import { createLogger } from '../utils/logger.js';
+import { detectDomainPersonas, type PersonaTemplate } from '../personas/persona-templates.js';
 
 const log = createLogger('workflow:understand');
 
@@ -27,6 +28,8 @@ export interface UnderstandOutput {
   nextAction: string;
   /** Raw analysis for logging */
   rawAnalysis: string;
+  /** Domain-specific personas detected from goal (for auto-creation) */
+  suggestedPersonas: PersonaTemplate[];
 }
 
 /**
@@ -56,6 +59,7 @@ export function analyzeGoal(input: UnderstandInput): UnderstandOutput {
       personaQuestions: [],
       nextAction: '목표 명확화 필요',
       rawAnalysis: 'Goal: (empty)\nType: simple\nComplexity: low',
+      suggestedPersonas: [],
     };
   }
 
@@ -157,12 +161,16 @@ export function analyzeGoal(input: UnderstandInput): UnderstandOutput {
 
   const rawAnalysis = `Goal: ${goal}\nType: ${taskType}\nComplexity: ${complexity}\nScope: ${scope}\nRequirements: ${keyRequirements.join(', ')}\nRisks: ${risks.join(', ')}`;
 
-  log.info('Goal analysis complete', { taskType, complexity });
+  // Detect domain-specific personas
+  const suggestedPersonas = detectDomainPersonas(goal);
+
+  log.info('Goal analysis complete', { taskType, complexity, suggestedPersonaCount: suggestedPersonas.length });
 
   return {
     analysis: { taskType, complexity, scope, keyRequirements, risks },
     personaQuestions,
     nextAction,
     rawAnalysis,
+    suggestedPersonas,
   };
 }

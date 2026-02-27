@@ -135,6 +135,55 @@ export class PersonaLoader {
   }
 
   /**
+   * Update an existing persona definition in the vault.
+   */
+  async updatePersona(id: string, updates: Partial<Omit<Persona, 'id' | 'metadata'>>): Promise<boolean> {
+    const existing = await this.loadPersona(id);
+    if (!existing) {
+      log.warn(`Cannot update non-existent persona: ${id}`);
+      return false;
+    }
+
+    const merged: Omit<Persona, 'metadata'> = {
+      id,
+      name: updates.name ?? existing.name,
+      category: updates.category ?? existing.category,
+      era: updates.era ?? existing.era,
+      activatedAt: updates.activatedAt ?? existing.activatedAt,
+      priority: updates.priority ?? existing.priority,
+      content: updates.content ?? existing.content,
+    };
+
+    const filePath = `${this.personasDir}/${id}.md`;
+    const frontmatter: Record<string, unknown> = {
+      id: merged.id,
+      name: merged.name,
+      category: merged.category,
+      era: merged.era,
+      activated_at: merged.activatedAt,
+      priority: merged.priority,
+    };
+
+    await this.store.writeNote(filePath, merged.content, frontmatter);
+    this.cache.set(id, { ...merged, metadata: frontmatter });
+    log.info(`Persona updated: ${id}`);
+    return true;
+  }
+
+  /**
+   * Delete a persona from the vault.
+   */
+  async deletePersona(id: string): Promise<boolean> {
+    const filePath = `${this.personasDir}/${id}.md`;
+    const deleted = await this.store.deleteNote(filePath);
+    this.cache.delete(id);
+    if (deleted) {
+      log.info(`Persona deleted: ${id}`);
+    }
+    return deleted;
+  }
+
+  /**
    * Clear the in-memory cache.
    */
   clearCache(): void {

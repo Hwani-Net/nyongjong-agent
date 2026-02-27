@@ -7,6 +7,7 @@ const mockStore = {
   exists: vi.fn(),
   readNote: vi.fn(),
   writeNote: vi.fn(),
+  deleteNote: vi.fn(),
   listNotes: vi.fn(),
   searchNotes: vi.fn(),
 };
@@ -156,3 +157,114 @@ describe('PersonaEngine', () => {
     expect(summary['business']).toBeDefined();
   });
 });
+
+describe('PersonaLoader CRUD', () => {
+  let loader: PersonaLoader;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    loader = new PersonaLoader({
+      store: mockStore as any,
+      personasDir: 'agent/personas',
+    });
+  });
+
+  it('should update an existing persona', async () => {
+    // First, prime the cache with an existing persona
+    mockStore.exists.mockResolvedValue(true);
+    mockStore.readNote.mockResolvedValue({
+      path: 'agent/personas/test-p.md',
+      content: 'Original content',
+      frontmatter: {
+        id: 'test-p',
+        name: 'Test Persona',
+        category: 'business',
+        era: '2024',
+        activated_at: ['understand'],
+        priority: 'normal',
+      },
+    });
+    mockStore.writeNote.mockResolvedValue(undefined);
+
+    const result = await loader.updatePersona('test-p', {
+      name: 'Updated Persona',
+      content: 'Updated content',
+    });
+
+    expect(result).toBe(true);
+    expect(mockStore.writeNote).toHaveBeenCalledWith(
+      'agent/personas/test-p.md',
+      'Updated content',
+      expect.objectContaining({ name: 'Updated Persona', id: 'test-p' }),
+    );
+  });
+
+  it('should return false when updating non-existent persona', async () => {
+    mockStore.exists.mockResolvedValue(false);
+    const result = await loader.updatePersona('nonexistent', { name: 'New Name' });
+    expect(result).toBe(false);
+  });
+
+  it('should delete a persona', async () => {
+    mockStore.deleteNote.mockResolvedValue(true);
+    const result = await loader.deletePersona('test-p');
+    expect(result).toBe(true);
+    expect(mockStore.deleteNote).toHaveBeenCalledWith('agent/personas/test-p.md');
+  });
+
+  it('should return false when deleting non-existent persona', async () => {
+    mockStore.deleteNote.mockResolvedValue(false);
+    const result = await loader.deletePersona('nonexistent');
+    expect(result).toBe(false);
+  });
+});
+
+describe('PersonaEngine auto-creation', () => {
+  it('should auto-create persona from template when not found', async () => {
+    vi.clearAllMocks();
+    const loader = new PersonaLoader({
+      store: mockStore as any,
+      personasDir: 'agent/personas',
+    });
+    const engine = new PersonaEngine(loader);
+
+    // First loadPersona returns null (not found), then returns the created persona
+    mockStore.exists
+      .mockResolvedValueOnce(false)   // ensurePersonaExists → loadPersona → not found
+      .mockResolvedValueOnce(true);   // ensurePersonaExists → loadPersona after create → found
+    mockStore.writeNote.mockResolvedValue(undefined);  // createPersona
+    mockStore.readNote.mockResolvedValue({
+      path: 'agent/personas/test-template.md',
+      content: 'Template content',
+      frontmatter: {
+        id: 'test-template',
+        name: 'Test Template',
+        category: 'engineer',
+        activated_at: ['validate'],
+        priority: 'normal',
+      },
+    });
+    // loadAll for stage filtering returns empty
+    mockStore.listNotes.mockResolvedValue([]);
+
+    const plan = await engine.createConsultationPlan({
+      stage: 'validate',
+      topic: 'Test auto-creation',
+      suggestedPersonas: [{
+        id: 'test-template',
+        name: 'Test Template',
+        category: 'engineer',
+        era: '2024',
+        activatedAt: ['validate'],
+        priority: 'normal',
+        content: 'Template content',
+      }],
+      autoCreate: true,
+      maxPersonas: 3,
+    });
+
+    expect(mockStore.writeNote).toHaveBeenCalled();
+    expect(plan.consultations.length).toBeGreaterThanOrEqual(1);
+  });
+});
+

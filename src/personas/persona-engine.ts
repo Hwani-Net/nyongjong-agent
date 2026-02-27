@@ -1,5 +1,6 @@
 // Persona engine — context-aware automatic persona selection and consultation
 import { PersonaLoader, type Persona, type PersonaCategory } from './persona-loader.js';
+import type { PersonaTemplate } from './persona-templates.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('persona-engine');
@@ -17,6 +18,10 @@ export interface ConsultationRequest {
   categories?: PersonaCategory[];
   /** Max number of personas to consult */
   maxPersonas?: number;
+  /** Optional: domain-detected persona templates to auto-create if missing */
+  suggestedPersonas?: PersonaTemplate[];
+  /** Whether to auto-create suggested personas that don't exist yet */
+  autoCreate?: boolean;
 }
 
 export interface PersonaConsultation {
@@ -55,10 +60,18 @@ export class PersonaEngine {
    * and generates prompts for each.
    */
   async createConsultationPlan(request: ConsultationRequest): Promise<ConsultationPlan> {
-    const { stage, topic, includePersonas, categories, maxPersonas = 3 } = request;
+    const { stage, topic, includePersonas, categories, maxPersonas = 3, suggestedPersonas, autoCreate = true } = request;
     log.info(`Creating consultation plan for stage: ${stage}`, { topic });
 
     let candidates: Persona[] = [];
+
+    // 0. Auto-create domain-specific personas if requested
+    if (suggestedPersonas && suggestedPersonas.length > 0 && autoCreate) {
+      for (const template of suggestedPersonas) {
+        const persona = await this.ensurePersonaExists(template);
+        if (persona) candidates.push(persona);
+      }
+    }
 
     // 1. Load explicitly requested personas
     if (includePersonas && includePersonas.length > 0) {
@@ -104,6 +117,31 @@ export class PersonaEngine {
     });
 
     return { stage, topic, consultations };
+  }
+
+  /**
+   * Ensure a persona exists in the vault. If not, create it from a template.
+   * Returns the loaded persona (existing or newly created).
+   */
+  private async ensurePersonaExists(template: PersonaTemplate): Promise<Persona | null> {
+    const existing = await this.loader.loadPersona(template.id);
+    if (existing) {
+      log.debug(`Persona already exists: ${template.id}`);
+      return existing;
+    }
+
+    log.info(`Auto-creating persona from template: ${template.id}`);
+    await this.loader.createPersona({
+      id: template.id,
+      name: template.name,
+      category: template.category,
+      era: template.era,
+      activatedAt: template.activatedAt,
+      priority: template.priority,
+      content: template.content,
+    });
+
+    return this.loader.loadPersona(template.id);
   }
 
   /**

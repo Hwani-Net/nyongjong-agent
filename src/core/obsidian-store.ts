@@ -1,5 +1,5 @@
 // Obsidian Vault filesystem adapter — reads/writes markdown with YAML frontmatter
-import { readFile, writeFile, readdir, stat, mkdir } from 'fs/promises';
+import { readFile, writeFile, readdir, stat, mkdir, unlink } from 'fs/promises';
 import { join, resolve, extname } from 'path';
 import matter from 'gray-matter';
 import { createLogger } from '../utils/logger.js';
@@ -162,6 +162,25 @@ export class ObsidianStore {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Delete a note from the vault.
+   * Returns true if the file was deleted, false if it didn't exist.
+   */
+  async deleteNote(relativePath: string): Promise<boolean> {
+    const fullPath = this.resolvePath(relativePath);
+    try {
+      await unlink(fullPath);
+      log.info(`Deleted note: ${relativePath}`);
+      return true;
+    } catch (err: any) {
+      if (err.code === 'ENOENT') {
+        log.debug(`Note not found for deletion: ${relativePath}`);
+        return false;
+      }
+      throw err;
     }
   }
 }

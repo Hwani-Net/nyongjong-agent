@@ -67,6 +67,9 @@ export function createMcpServer(options: McpServerOptions): McpServer {
   // Group: "persona" — persona system
   registry.register('persona_list', 'persona', 'List personas');
   registry.register('persona_consult', 'persona', 'Consult personas');
+  registry.register('persona_create', 'persona', 'Create a new persona');
+  registry.register('persona_update', 'persona', 'Update an existing persona');
+  registry.register('persona_delete', 'persona', 'Delete a persona');
 
   // Group: "workflow" — AI circular workflow
   registry.register('analyze_goal', 'workflow', 'Analyze user goal');
@@ -372,6 +375,82 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       }
 
       return { content: [{ type: 'text' as const, text: 'No personas found for this stage/topic.' }] };
+    },
+  );
+
+  // ─── Tool: persona_create ───
+  server.tool(
+    'persona_create',
+    'Create a new persona definition in the vault',
+    {
+      id: z.string().describe('Unique persona ID (e.g., "devops-engineer")'),
+      name: z.string().describe('Display name (e.g., "DevOps 엔지니어")'),
+      category: z.enum(['customer', 'philosopher', 'business', 'engineer', 'regulatory', 'temporal']).describe('Persona category'),
+      activatedAt: z.array(z.enum(['understand', 'prototype', 'validate', 'evolve', 'report'])).describe('Workflow stages to activate'),
+      priority: z.enum(['low', 'normal', 'high', 'critical']).optional().describe('Priority (default: normal)'),
+      content: z.string().describe('Full persona description text'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('persona_create')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('persona_create') }] };
+      }
+      log.info('persona_create called', { id: params.id });
+      await personaLoader.createPersona({
+        id: params.id,
+        name: params.name,
+        category: params.category,
+        era: new Date().getFullYear().toString(),
+        activatedAt: params.activatedAt,
+        priority: params.priority || 'normal',
+        content: params.content,
+      });
+      return { content: [{ type: 'text' as const, text: `Persona created: ${params.id} (${params.name})` }] };
+    },
+  );
+
+  // ─── Tool: persona_update ───
+  server.tool(
+    'persona_update',
+    'Update an existing persona definition',
+    {
+      id: z.string().describe('Persona ID to update'),
+      name: z.string().optional().describe('New display name'),
+      category: z.enum(['customer', 'philosopher', 'business', 'engineer', 'regulatory', 'temporal']).optional().describe('New category'),
+      activatedAt: z.array(z.enum(['understand', 'prototype', 'validate', 'evolve', 'report'])).optional().describe('New activation stages'),
+      priority: z.enum(['low', 'normal', 'high', 'critical']).optional().describe('New priority'),
+      content: z.string().optional().describe('New description text'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('persona_update')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('persona_update') }] };
+      }
+      log.info('persona_update called', { id: params.id });
+      const { id, ...updates } = params;
+      const success = await personaLoader.updatePersona(id, updates);
+      if (success) {
+        return { content: [{ type: 'text' as const, text: `Persona updated: ${id}` }] };
+      }
+      return { content: [{ type: 'text' as const, text: `Persona not found: ${id}` }] };
+    },
+  );
+
+  // ─── Tool: persona_delete ───
+  server.tool(
+    'persona_delete',
+    'Delete a persona from the vault',
+    {
+      id: z.string().describe('Persona ID to delete'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('persona_delete')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('persona_delete') }] };
+      }
+      log.info('persona_delete called', { id: params.id });
+      const deleted = await personaLoader.deletePersona(params.id);
+      if (deleted) {
+        return { content: [{ type: 'text' as const, text: `Persona deleted: ${params.id}` }] };
+      }
+      return { content: [{ type: 'text' as const, text: `Persona not found: ${params.id}` }] };
     },
   );
 

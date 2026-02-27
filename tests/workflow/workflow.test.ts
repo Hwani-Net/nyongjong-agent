@@ -101,6 +101,17 @@ describe('Workflow: Understand', () => {
     const result = analyzeGoal({ goal: 'K8s CronJob으로 DB 백업 시스템을 구축' });
     expect(result.analysis.keyRequirements).toContain('새 기능 구현');
   });
+
+  it('should suggest fintech persona for payment-related goals', () => {
+    const result = analyzeGoal({ goal: '카카오페이 결제 연동 API를 구현해줘' });
+    expect(result.suggestedPersonas.length).toBeGreaterThanOrEqual(1);
+    expect(result.suggestedPersonas.some(p => p.id === 'fintech-advisor')).toBe(true);
+  });
+
+  it('should return empty suggestedPersonas for generic goals', () => {
+    const result = analyzeGoal({ goal: '버튼 색상 변경' });
+    expect(result.suggestedPersonas.length).toBe(0);
+  });
 });
 
 describe('Workflow: Prototype', () => {
