@@ -719,8 +719,11 @@ body {
       <!-- Cache Stats -->
       <div class="page" id="page-cache-stats">
         <div class="fade-in">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
-            <span id="csLastRefresh" style="font-size:0.75rem;color:var(--text-secondary)">마지막 갱신: 대기 중</span>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:0.5rem">
+            <div style="display:flex;align-items:center;gap:0.75rem">
+              <span id="csHealthBadge" class="badge badge-green">✅ Healthy</span>
+              <span id="csLastRefresh" style="font-size:0.75rem;color:var(--text-secondary)">마지막 갱신: 대기 중</span>
+            </div>
             <button class="btn" onclick="refreshCacheStats()">🔄 Refresh</button>
           </div>
           <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
@@ -728,6 +731,10 @@ body {
             <div class="kpi-card"><div class="kpi-label">MCP Tools</div><div class="kpi-value" id="csMcpCount" style="color:var(--blue)">—</div><div class="kpi-sub">활성화됨</div></div>
             <div class="kpi-card"><div class="kpi-label">업타임 Uptime</div><div class="kpi-value" id="csUptime" style="color:var(--accent)">—</div></div>
             <div class="kpi-card"><div class="kpi-label">Gate 역사</div><div class="kpi-value" id="csGateCount" style="color:var(--text-secondary)">—</div><div class="kpi-sub">누적 게이트</div></div>
+          </div>
+          <div class="kpi-card section" style="margin-bottom:1rem">
+            <div class="section-title">🔧 모듈 상태</div>
+            <div id="csModuleStatus" style="display:flex;flex-wrap:wrap;gap:0.375rem"><span style="color:var(--text-secondary);font-size:0.8rem">로딩 중...</span></div>
           </div>
           <div class="kpi-card section">
             <div class="section-title">🌐 Grounding Adapter Status</div>
@@ -745,9 +752,20 @@ body {
             <div id="csMcpTools" style="display:flex;flex-wrap:wrap;gap:0.375rem"></div>
           </div>
           <div class="kpi-card section">
-            <div class="section-title">📜 Gate 실행 이력 (Server Memory)</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
+              <div class="section-title" style="margin:0">📜 Gate 실행 이력 (Server Memory)</div>
+            </div>
             <div id="csGateLog" style="font-size:0.75rem;max-height:200px;overflow-y:auto">
               <div style="padding:1rem;text-align:center;color:var(--text-secondary)">없음</div>
+            </div>
+          </div>
+          <div class="kpi-card section">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
+              <div class="section-title" style="margin:0">🚨 에러 로그 <span id="csErrorCount" class="badge badge-red" style="font-size:0.7rem">0</span></div>
+              <button class="btn" style="font-size:0.75rem;padding:0.25rem 0.625rem" onclick="clearErrors()">🗑️ 클리어</button>
+            </div>
+            <div id="csErrorLog" style="font-size:0.75rem;max-height:200px;overflow-y:auto">
+              <div style="padding:0.75rem;text-align:center;color:var(--text-secondary);font-size:0.8rem">✅ 에러 없음</div>
             </div>
           </div>
         </div>
@@ -1197,7 +1215,7 @@ const adapterDefs = [
   { id: 'adapterNaver',   name: 'Naver',   key: 'NAVER_CLIENT_ID' },
   { id: 'adapterTrends',  name: 'Trends',  key: null },
   { id: 'adapterLaw',     name: 'Law KR',  key: null },
-  { id: 'adapterReviews', name: 'Reviews', key: 'APP_REVIEWS_KEY' },
+  { id: 'adapterReviews', name: 'Reviews', key: null },   // Play Store scraping — no key needed
   { id: 'adapterScraper', name: 'Scraper', key: null },
 ];
 async function refreshCacheStats() {
@@ -1208,8 +1226,43 @@ async function refreshCacheStats() {
     // KPIs
     const tools = data.tools || [];
     document.getElementById('csMcpCount').textContent = tools.filter(t => t.enabled).length;
-    document.getElementById('csHitRate').textContent = '—'; // 실서버 연동 예정
-    document.getElementById('csUptime').textContent = '✔ Running';
+
+    // ── 실제 Grounding 캐시 히트율 연동 ──
+    const cache = data.cache || {};
+    const hitRate = cache.hitRate != null ? Math.round(cache.hitRate) : null;
+    const hitRateEl = document.getElementById('csHitRate');
+    if (hitRate != null) {
+      hitRateEl.textContent = hitRate + '%';
+      hitRateEl.style.color = hitRate >= 70 ? 'var(--green)' : hitRate >= 40 ? 'var(--accent)' : 'var(--red)';
+    } else {
+      hitRateEl.textContent = '0%';
+      hitRateEl.style.color = 'var(--text-secondary)';
+    }
+
+    // Uptime from /health
+    try {
+      const hResp = await fetch('/health');
+      const hData = await hResp.json();
+      const upSec = hData.uptime || 0;
+      const upStr = upSec < 60 ? upSec + 's' : upSec < 3600 ? Math.floor(upSec/60) + 'm' : Math.floor(upSec/3600) + 'h ' + Math.floor((upSec%3600)/60) + 'm';
+      document.getElementById('csUptime').textContent = upStr;
+      // Health badge
+      const healthBadge = document.getElementById('csHealthBadge');
+      if (healthBadge) {
+        healthBadge.className = 'badge ' + (hData.status === 'ok' ? 'badge-green' : 'badge-red');
+        healthBadge.textContent = hData.status === 'ok' ? '✅ Healthy' : '⚠️ ' + hData.status;
+      }
+      // Module status
+      const mods = hData.modules || {};
+      const modEl = document.getElementById('csModuleStatus');
+      if (modEl) {
+        modEl.innerHTML = Object.entries(mods).map(([k, v]) =>
+          '<span class="badge ' + (v === 'ok' || v === 'online' ? 'badge-green' : v === 'offline' ? 'badge-orange' : 'badge-blue') + '">' +
+          k + ': ' + v + '</span>'
+        ).join(' ');
+      }
+    } catch {}
+
     // Gate count
     try {
       const ghR = await fetch('/api/gate-history');
@@ -1218,18 +1271,41 @@ async function refreshCacheStats() {
       const logEl = document.getElementById('csGateLog');
       if (gh.length > 0) {
         logEl.innerHTML = gh.map(h =>
-          '<div style="display:flex;gap:0.5rem;padding:0.375rem 0;border-bottom:1px solid var(--border)">' +
-          '<span class="badge ' + (h.verdict==='PASS'?'badge-green':h.verdict==='PIVOT'?'badge-orange':'badge-red') + '">' + h.verdict + '</span>' +
-          '<span style="flex:1">' + h.goal.slice(0,50) + '</span>' +
-          '<span style="color:var(--text-secondary)">' + h.time + '</span></div>'
+          '<div style="display:flex;gap:0.5rem;padding:0.375rem 0;border-bottom:1px solid var(--border);align-items:center">' +
+          '<span class="badge ' + (h.verdict==='PASS'?'badge-green':h.verdict==='SKIP'?'badge-blue':h.verdict==='PIVOT'?'badge-orange':'badge-red') + '">' + h.verdict + '</span>' +
+          '<span style="flex:1;font-size:0.8rem">' + h.goal.slice(0,50) + '</span>' +
+          '<span style="color:var(--text-secondary);font-size:0.7rem">' + h.time + '</span></div>'
         ).join('');
       } else {
         logEl.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--text-secondary)">현 세션에서 게이트 실행 없음</div>';
       }
     } catch {}
+
+    // ── 에러 로그 패널 (/api/errors) ──
+    try {
+      const errR = await fetch('/api/errors');
+      const errData = await errR.json();
+      const errLog = errData.logs || [];
+      const errEl = document.getElementById('csErrorLog');
+      const errBadge = document.getElementById('csErrorCount');
+      if (errBadge) errBadge.textContent = errLog.length;
+      if (errEl) {
+        if (errLog.length > 0) {
+          errEl.innerHTML = errLog.slice(0,10).map(e =>
+            '<div style="display:flex;gap:0.5rem;padding:0.375rem 0;border-bottom:1px solid var(--border);align-items:flex-start">' +
+            '<span class="badge ' + (e.level === 'error' ? 'badge-red' : 'badge-orange') + '" style="font-size:0.65rem">' + (e.level || 'warn').toUpperCase() + '</span>' +
+            '<span style="flex:1;font-size:0.75rem;word-break:break-all">' + (e.message || '').slice(0,80) + '</span>' +
+            '<span style="color:var(--text-secondary);font-size:0.65rem;white-space:nowrap">' + (e.time || '') + '</span></div>'
+          ).join('');
+        } else {
+          errEl.innerHTML = '<div style="padding:0.75rem;text-align:center;color:var(--text-secondary);font-size:0.8rem">✅ 에러 없음</div>';
+        }
+      }
+    } catch {}
+
     // MCP tools
     const toolsEl = document.getElementById('csMcpTools');
-    toolsEl.innerHTML = tools.map(t => '<span class="tool-chip ' + (t.enabled?'tool-enabled':'tool-disabled') + '">' + (t.enabled?'✅':'○') + ' ' + t.name + '</span>').join('');
+    toolsEl.innerHTML = tools.map(t => '<span class="tool-chip ' + (t.enabled ? 'tool-enabled' : 'tool-disabled') + '">' + (t.enabled ? '✅' : '○') + ' ' + t.name + '</span>').join('');
     // Adapters
     const envKeys = data.envKeys || {};
     adapterDefs.forEach(a => {
@@ -1242,6 +1318,15 @@ async function refreshCacheStats() {
   } catch {
     document.getElementById('csHitRate').textContent = '연결 실패';
   }
+}
+
+async function clearErrors() {
+  try {
+    await fetch('/api/errors', { method: 'DELETE' });
+    document.getElementById('csErrorCount').textContent = '0';
+    document.getElementById('csErrorLog').innerHTML =
+      '<div style="padding:0.75rem;text-align:center;color:var(--text-secondary);font-size:0.8rem">✅ 클리어 완료</div>';
+  } catch {}
 }
 </script>
 </body>

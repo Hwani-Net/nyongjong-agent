@@ -159,7 +159,7 @@ export async function getAgentStatus(modules: AgentModules, config: AppConfig): 
   } catch { /* personas may not be loaded yet */ }
 
   // Read version from package.json (single source of truth)
-  let version = '0.4.1';
+  let version = '0.5.0';
   try {
     const pkgPath = resolve(fileURLToPath(import.meta.url), '../../../package.json');
     const { readFileSync } = await import('fs');
