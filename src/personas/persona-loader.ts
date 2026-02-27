@@ -74,8 +74,16 @@ export class PersonaLoader {
 
   /**
    * Load all personas from the vault directory.
+   * Result is TTL-cached for 30s to avoid repeated I/O and log spam.
    */
+  private allCache: { personas: Persona[]; expiresAt: number } | null = null;
+
   async loadAll(): Promise<Persona[]> {
+    // Return cached result if still fresh (30s TTL)
+    if (this.allCache && Date.now() < this.allCache.expiresAt) {
+      return this.allCache.personas;
+    }
+
     const notePaths = await this.store.listNotes(this.personasDir, false);
     const personas: Persona[] = [];
 
@@ -95,7 +103,9 @@ export class PersonaLoader {
       }
     }
 
-    log.info(`Loaded ${personas.length} personas`);
+    // Cache for 30 seconds
+    this.allCache = { personas, expiresAt: Date.now() + 30_000 };
+    log.debug(`Loaded ${personas.length} personas (cached 30s)`);
     return personas;
   }
 

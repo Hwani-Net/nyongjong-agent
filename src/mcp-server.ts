@@ -10,11 +10,15 @@ import { type AppConfig } from './core/config.js';
 import { PersonaLoader } from './personas/persona-loader.js';
 import { PersonaEngine } from './personas/persona-engine.js';
 import { PersonaSimulator } from './personas/persona-simulator.js';
-import { analyzeGoal } from './workflow/understand.js';
+import { analyzeGoal, detectAmbiguities, generateOptions, formatAnalysisForPRD } from './workflow/understand.js';
+import { runBusinessGate, formatBusinessGateReport, shouldRunBusinessGate } from './workflow/business-gate.js';
+import { runPRDElicitation } from './workflow/prd-elicitation.js';
+import { classifyFeedback, formatFeedbackReport } from './workflow/feedback-router.js';
 import { GroundingEngine } from './grounding/grounding-engine.js';
 import { CycleRunner } from './workflow/cycle-runner.js';
 import { ShellRunner } from './execution/shell-runner.js';
 import { createLogger } from './utils/logger.js';
+import { recordGateDecision, setLastGate, setLastPRD } from './core/shared-state.js';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
@@ -74,6 +78,9 @@ export function createMcpServer(options: McpServerOptions): McpServer {
   // Group: "workflow" — AI circular workflow
   registry.register('analyze_goal', 'workflow', 'Analyze user goal');
   registry.register('run_cycle', 'workflow', 'Run full AI workflow cycle');
+  registry.register('business_gate', 'workflow', 'Gate 0: Business viability check');
+  registry.register('prd_elicit', 'workflow', 'Gate 1: PRD self-healing loop');
+  registry.register('feedback_classify', 'workflow', 'Classify human feedback for rollback');
 
   // Group: "advisory" — Ollama / LLM
   registry.register('ollama_health', 'advisory', 'Check Ollama status');
@@ -505,6 +512,155 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       }
       const analysis = groundingEngine.quickCheck(params.text);
       return { content: [{ type: 'text' as const, text: JSON.stringify(analysis, null, 2) }] };
+    },
+  );
+
+  // ─── Tool: business_gate ───
+  server.tool(
+    'business_gate',
+    'Gate 0: Business viability check — business personas review goal before PRD generation',
+    {
+      goal: z.string().describe('The goal to evaluate for business viability'),
+      groundingData: z.string().optional().describe('Optional market data from grounding engine'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('business_gate')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('business_gate') }] };
+      }
+      log.info('business_gate called', { goal: params.goal.slice(0, 80) });
+      const analysis = analyzeGoal({ goal: params.goal });
+
+      // Auto-inject grounding data if not provided
+      let groundingData = params.groundingData;
+      if (!groundingData) {
+        try {
+          const groundingResult = await groundingEngine.ground(params.goal);
+          if (groundingResult.status !== 'no_claims' && groundingResult.verifications.length > 0) {
+            groundingData = groundingResult.summary + '\n' +
+              groundingResult.verifications
+                .filter(v => v.verified)
+                .map(v => `- [${v.claim.type}] ${v.claim.text}: ${v.apiResult.data.slice(0, 100)}`)
+                .join('\n');
+            log.info('Auto-grounding injected', { claims: groundingResult.verifications.length });
+          }
+        } catch (err) {
+          log.debug('Auto-grounding skipped (error)', err);
+        }
+      }
+
+      // Check if gate should run at all
+      const gateNeed = shouldRunBusinessGate(
+        params.goal,
+        analysis.analysis.taskType,
+        analysis.analysis.complexity,
+      );
+
+      if (gateNeed.need === 'SKIP') {
+        const skipReport = `## ⏭️ 사업성 검토 건너뜀\n\n**사유:** ${gateNeed.reason}\n\n→ Gate 1(PRD)으로 바로 진행합니다.`;
+        return { content: [{ type: 'text' as const, text: skipReport }] };
+      }
+
+      if (gateNeed.need === 'ASK_HUMAN') {
+        const askReport = `## ❓ 사업성 검토 필요 여부 확인\n\n**사유:** ${gateNeed.reason}\n\n이 작업에 사업성 검토가 필요한가요?\n- **"예"** → 사업성 검토 진행\n- **"아니오"** → PRD로 바로 진행`;
+        return { content: [{ type: 'text' as const, text: askReport }] };
+      }
+
+      // REQUIRED — check Ollama availability, pass simulator if available
+      const ollamaOk = await personaSimulator.healthCheck().then(h => h.available).catch(() => false);
+      const result = await runBusinessGate(
+        {
+          goal: params.goal,
+          analysis,
+          groundingData: params.groundingData,
+          simulator: ollamaOk ? personaSimulator : undefined,
+        },
+        personaEngine,
+      );
+
+      // ── #6 Stage-Gate → Dashboard 고도화 ──
+      recordGateDecision({
+        goal: params.goal,
+        verdict: result.verdict as 'PASS' | 'PIVOT' | 'FAIL',
+        taskType: analysis.analysis.taskType,
+      });
+      setLastGate({
+        reviews: result.reviews.map(r => ({
+          personaId: r.personaId,
+          personaName: r.personaName,
+          verdict: r.verdict,
+          feedback: r.feedback,
+        })),
+        hasGrounding: !!groundingData,
+        goal: params.goal,
+        verdict: result.verdict,
+        ts: Date.now(),
+      });
+
+      const modeTag = ollamaOk ? '> 🤖 **LLM 모드** (Ollama 연동)\n\n' : '> 🧪 **휴리스틱 모드** (Ollama 미연동)\n\n';
+      const report = formatBusinessGateReport(result);
+      return { content: [{ type: 'text' as const, text: modeTag + report }] };
+    },
+  );
+
+  // ─── Tool: prd_elicit ───
+  server.tool(
+    'prd_elicit',
+    'Gate 1: PRD self-healing loop — customer personas review and refine PRD until satisfied',
+    {
+      goal: z.string().describe('The goal to generate PRD for'),
+      projectContext: z.string().optional().describe('Existing project context'),
+      maxRounds: z.number().optional().describe('Max refinement rounds (default: 3)'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('prd_elicit')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('prd_elicit') }] };
+      }
+      log.info('prd_elicit called', { goal: params.goal.slice(0, 80) });
+      const analysis = analyzeGoal({ goal: params.goal, projectContext: params.projectContext });
+      const ollamaOk2 = await personaSimulator.healthCheck().then(h => h.available).catch(() => false);
+      const result = await runPRDElicitation(
+        {
+          goal: params.goal,
+          analysis,
+          projectContext: params.projectContext,
+          maxRounds: params.maxRounds,
+          simulator: ollamaOk2 ? personaSimulator : undefined,
+        },
+        personaEngine,
+      );
+
+      // ── #6/8 PRD 결과 → Dashboard LastPRD ──
+      setLastPRD({
+        version: result.prd.version,
+        verdicts: result.verdicts.map((v, i) => ({
+          round: i + 1,
+          status: v.verdict,
+          issues: v.blockers,
+        })),
+        rounds: result.rounds,
+        goal: params.goal,
+        ts: Date.now(),
+      });
+
+      return { content: [{ type: 'text' as const, text: result.report }] };
+    },
+  );
+
+  // ─── Tool: feedback_classify ───
+  server.tool(
+    'feedback_classify',
+    'Classify human feedback to determine minimum rollback point (gate0/gate1/stitch/evolve)',
+    {
+      feedback: z.string().describe('Human feedback text to classify'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('feedback_classify')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('feedback_classify') }] };
+      }
+      log.info('feedback_classify called', { feedbackLen: params.feedback.length });
+      const classification = classifyFeedback(params.feedback);
+      const report = formatFeedbackReport(classification);
+      return { content: [{ type: 'text' as const, text: report }] };
     },
   );
 

@@ -92,10 +92,10 @@ describe('Dashboard Server', () => {
       }
     });
 
-    it('should contain v0.4.0 version reference', async () => {
+    it('should contain v0.4.1 version reference', async () => {
       const fs = await import('fs/promises');
       const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
-      expect(content).toContain('v0.4.0');
+      expect(content).toContain('v0.4.1');
     });
   });
 
@@ -196,6 +196,88 @@ describe('Dashboard Server', () => {
       expect(content).toContain("build: 'npm run build'");
       expect(content).toContain("test: 'npm test'");
       expect(content).toContain("lint: 'npx tsc --noEmit'");
+    });
+  });
+
+  describe('/health endpoint', () => {
+    it('should have /health route handler in server.ts', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain("'/health'");
+    });
+
+    it('should also respond to /healthz (k8s convention)', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain("'/healthz'");
+    });
+
+    it('should return status, version, uptime fields', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain("status: healthy");
+      expect(content).toContain("version,");    // dynamic from package.json
+      expect(content).toContain("uptime: uptimeSec");
+    });
+
+    it('should track serverStartTime for uptime calculation', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain('serverStartTime = Date.now()');
+      expect(content).toContain('Date.now() - serverStartTime');
+    });
+
+    it('should include module status and env key checks', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain("modules:");
+      expect(content).toContain("KOSIS_API_KEY");
+      expect(content).toContain("NAVER_CLIENT_ID");
+    });
+
+    it('should respond 200 when healthy', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      // healthy ? 200 : 503 pattern must exist
+      expect(content).toContain('healthy ? 200 : 503');
+    });
+
+    it('should expose recordGateDecision in shared-state module', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/core/shared-state.ts', 'utf-8');
+      expect(content).toContain('export function recordGateDecision');
+    });
+
+    it('should have /api/gate-history GET and POST handlers', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain("'/api/gate-history'");
+      expect(content).toContain("req.method === 'GET'");
+      expect(content).toContain("req.method === 'POST'");
+    });
+
+    it('should check taskManager and obsidian for degraded status', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain('taskManagerOk');
+      expect(content).toContain('obsidianOk');
+      expect(content).toContain('taskManagerOk && obsidianOk');
+      expect(content).toContain("'ok' : 'degraded'");  // ternary: healthy ? 'ok' : 'degraded'
+    });
+
+    it('should include issues array when modules are unhealthy', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain('issues');
+      expect(content).toContain('issues.length > 0');
+    });
+
+    it('should expose /api/errors endpoint', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain("'/api/errors'");
+      expect(content).toContain('getErrorLog');
+      expect(content).toContain('clearErrorLog');
     });
   });
 });

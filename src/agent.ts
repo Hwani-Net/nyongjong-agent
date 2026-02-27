@@ -13,6 +13,8 @@ import { CycleRunner } from './workflow/cycle-runner.js';
 import { ShellRunner } from './execution/shell-runner.js';
 import { TestRunner } from './execution/test-runner.js';
 import { GitWorktree } from './execution/git-worktree.js';
+import { ToolRegistry } from './core/tool-registry.js';
+import { getGateHistory, getLastGate, getLastPRD } from './core/shared-state.js';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
@@ -36,6 +38,7 @@ export interface AgentModules {
   shellRunner: ShellRunner;
   testRunner: TestRunner;
   gitWorktree: GitWorktree;
+  toolRegistry: ToolRegistry;
 }
 
 /**
@@ -80,6 +83,33 @@ export function initializeAgent(config: AppConfig): AgentModules {
     runShell: (cmd, cwd) => shellRunner.run(cmd, cwd),
   });
 
+  // Tool Registry — single source of truth for all MCP tools
+  const toolRegistry = new ToolRegistry();
+  const toolDefs: Array<[string, string, string]> = [
+    ['agent_status',       'core',     'Get current agent status'],
+    ['tool_toggle',        'core',     'Enable or disable a tool'],
+    ['tool_status',        'core',     'List all tool states'],
+    ['task_list',          'task',     'List tasks in queue'],
+    ['task_create',        'task',     'Create a new task'],
+    ['recommend_model',    'model',    'Recommend an AI model'],
+    ['list_models',        'model',    'List available models'],
+    ['memory_search',      'memory',   'Search Obsidian vault'],
+    ['memory_write',       'memory',   'Write to Obsidian vault'],
+    ['persona_list',       'persona',  'List all personas'],
+    ['persona_consult',    'persona',  'Consult a persona'],
+    ['persona_create',     'persona',  'Create a new persona'],
+    ['persona_update',     'persona',  'Update a persona'],
+    ['persona_delete',     'persona',  'Delete a persona'],
+    ['analyze_goal',       'workflow', 'Analyze a goal (understand stage)'],
+    ['run_cycle',          'workflow', 'Run full AI workflow cycle'],
+    ['ollama_health',      'advisory', 'Check Ollama health'],
+    ['ground_check',       'grounding','Detect and verify factual claims'],
+    ['business_gate',      'workflow', 'Run business viability gate'],
+    ['prd_elicit',         'workflow', 'Elicit PRD requirements'],
+    ['feedback_classify',  'workflow', 'Classify and route feedback'],
+  ];
+  for (const [name, group, desc] of toolDefs) toolRegistry.register(name, group, desc);
+
   log.info('━━━ All modules initialized ━━━');
 
   return {
@@ -95,14 +125,29 @@ export function initializeAgent(config: AppConfig): AgentModules {
     shellRunner,
     testRunner,
     gitWorktree,
+    toolRegistry,
   };
+}
+
+// ── Ollama health 30s TTL cache (avoid HTTP on every SSE tick) ───────────
+let _ollamaHealthCache: { result: { available: boolean; models?: string[] }; expiresAt: number } | null = null;
+
+async function cachedOllamaHealth(
+  client: { healthCheck: () => Promise<{ available: boolean; models?: string[] }> },
+): Promise<{ available: boolean; models?: string[] }> {
+  if (_ollamaHealthCache && Date.now() < _ollamaHealthCache.expiresAt) {
+    return _ollamaHealthCache.result;
+  }
+  const result = await client.healthCheck();
+  _ollamaHealthCache = { result, expiresAt: Date.now() + 30_000 };
+  return result;
 }
 
 /**
  * Get a status summary of all agent modules.
  */
 export async function getAgentStatus(modules: AgentModules, config: AppConfig): Promise<Record<string, unknown>> {
-  const ollamaHealth = await modules.ollamaClient.healthCheck();
+  const ollamaHealth = await cachedOllamaHealth(modules.ollamaClient);
   const activeTask = await modules.taskManager.getActiveTask();
   const adapterStatus = modules.groundingEngine.getAdapterStatus();
   const taskQueue = await modules.taskManager.getQueue();
@@ -113,18 +158,22 @@ export async function getAgentStatus(modules: AgentModules, config: AppConfig): 
     personaSummary = await modules.personaEngine.getPersonaSummary();
   } catch { /* personas may not be loaded yet */ }
 
+  // Read version from package.json (single source of truth)
+  let version = '0.4.1';
+  try {
+    const pkgPath = resolve(fileURLToPath(import.meta.url), '../../../package.json');
+    const { readFileSync } = await import('fs');
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version?: string };
+    if (pkg.version) version = pkg.version;
+  } catch { /* fallback to hardcoded */ }
+
+  // ── Dynamic tool list from registry (single source of truth) ──
+  const registryState = modules.toolRegistry.getState();
+  const registrySummary = modules.toolRegistry.getSummary();
+
   return {
-    version: '0.4.0',
-    enabledTools: Object.values({
-      core: ['agent_status', 'tool_toggle', 'tool_status'],
-      task: ['task_list', 'task_create'],
-      model: ['recommend_model', 'list_models'],
-      memory: ['memory_search', 'memory_write'],
-      persona: ['persona_list', 'persona_consult', 'persona_create', 'persona_update', 'persona_delete'],
-      workflow: ['analyze_goal', 'run_cycle'],
-      advisory: ['ollama_health'],
-      grounding: ['ground_check'],
-    }).flat(),
+    version,
+    enabledTools: registryState.filter(t => t.enabled).map(t => t.name),
     status: 'running',
     modules: {
       obsidian: { connected: true, vault: config.OBSIDIAN_VAULT_PATH },
@@ -135,18 +184,32 @@ export async function getAgentStatus(modules: AgentModules, config: AppConfig): 
     activeTask: activeTask ? { id: activeTask.id, title: activeTask.title, status: activeTask.status } : null,
     taskQueue: taskQueue.map(t => ({ id: t.id, title: t.title, status: t.status, priority: t.priority })),
     personas: personaSummary,
-    toolGroups: {
-      core: { enabled: ['agent_status', 'tool_toggle', 'tool_status'], disabled: [] },
-      task: { enabled: ['task_list', 'task_create'], disabled: [] },
-      model: { enabled: ['recommend_model', 'list_models'], disabled: [] },
-      memory: { enabled: ['memory_search', 'memory_write'], disabled: [] },
-      persona: { enabled: ['persona_list', 'persona_consult', 'persona_create', 'persona_update', 'persona_delete'], disabled: [] },
-      workflow: { enabled: ['analyze_goal', 'run_cycle'], disabled: [] },
-      advisory: { enabled: ['ollama_health'], disabled: [] },
-      grounding: { enabled: ['ground_check'], disabled: [] },
-    },
+    toolGroups: registrySummary,
     ollamaStatus: ollamaHealth.available ? 'Connected' : 'Offline',
     ollamaModels: ollamaHealth.models || [],
     vaultPath: config.OBSIDIAN_VAULT_PATH || 'Not configured',
+
+    // ── Phase 5: Dashboard 추가 필드 ──
+    ollama: { available: ollamaHealth.available, models: ollamaHealth.models || [] },
+    envKeys: {
+      KOSIS_API_KEY:    !!process.env.KOSIS_API_KEY,
+      NAVER_CLIENT_ID:  !!process.env.NAVER_CLIENT_ID,
+      // law-kr: 법령정보 공개 API (no key required)
+      // app-reviews: Play Store scraping (no key required)
+    },
+    cache: (() => {
+      const gs = modules.groundingEngine.getStats();
+      return {
+        hitRate: gs.hitRate,              // 0-100%
+        fileCount: gs.cacheSize,         // cached result count
+        avgLatencyMs: gs.avgLatencyMs,   // average grounding call ms
+        uncachedMs: null as number | null,
+        invalidations: 0,
+      };
+    })(),
+    tools: registryState.map(t => ({ name: t.name, enabled: t.enabled, group: t.group })),
+    gateHistory: getGateHistory(),
+    lastGate: getLastGate(),
+    lastPRD: getLastPRD(),
   };
 }

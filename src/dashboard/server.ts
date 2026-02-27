@@ -1,9 +1,10 @@
 // Dashboard HTTP server — Phase 4 full dashboard with kanban, personas, tool groups
 import { createServer, type IncomingMessage, type ServerResponse } from 'http';
-import { createLogger } from '../utils/logger.js';
+import { createLogger, getErrorLog, clearErrorLog } from '../utils/logger.js';
 import { type AppConfig } from '../core/config.js';
 import { initializeAgent, getAgentStatus } from '../agent.js';
 import { analyzeGoal } from '../workflow/understand.js';
+import { recordGateDecision, getGateHistory, getLastGate, getLastPRD, type GateHistoryEntry } from '../core/shared-state.js';
 
 const log = createLogger('dashboard');
 
@@ -403,6 +404,31 @@ body {
   position: absolute; bottom: 0; left: 0; right: 0; height: 60px;
   background: repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 32px, rgba(255,255,255,0.01) 32px, rgba(255,255,255,0.01) 64px);
 }
+/* Stage-Gate styles */
+.sg-stage {
+  flex: 1; padding: 0.5rem 0.25rem; text-align: center;
+  background: var(--surface-alt); border-right: 1px solid var(--border);
+  font-size: 0.6875rem; font-weight: 600; color: var(--text-secondary);
+  transition: all 0.3s;
+}
+.sg-stage:last-child { border-right: none; }
+.sg-stage span { font-size: 0.625rem; font-weight: 400; }
+.sg-stage.sg-done { background: var(--green-light); color: var(--green); }
+.sg-stage.sg-active { background: linear-gradient(135deg, #3B82F6, #8B5CF6); color: white; }
+.sg-stage.sg-pending { opacity: 0.45; }
+.sg-review-card {
+  background: var(--surface-alt); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 0.75rem; margin-bottom: 0.5rem;
+  display: flex; align-items: flex-start; gap: 0.5rem;
+}
+.adapter-card {
+  background: var(--surface-alt); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 0.625rem 0.875rem;
+  font-size: 0.8125rem; font-weight: 600;
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+}
+.adapter-card.adapter-ok { border-left: 3px solid var(--green); }
+.adapter-card.adapter-off { border-left: 3px solid var(--red); opacity: 0.7; }
 </style>
 </head>
 <body>
@@ -444,9 +470,15 @@ body {
       <div class="nav-item" data-page="logs" onclick="showPage('logs')">
         <span class="icon">📝</span> Event Log
       </div>
+      <div class="nav-item" data-page="stage-gate" onclick="showPage('stage-gate')">
+        <span class="icon">🔀</span> Stage-Gate
+      </div>
+      <div class="nav-item" data-page="cache-stats" onclick="showPage('cache-stats')">
+        <span class="icon">📦</span> Cache Stats
+      </div>
     </nav>
     <div class="sidebar-footer">
-      <span style="font-size:0.75rem; color:var(--text-secondary)">v0.4.0</span>
+      <span style="font-size:0.75rem; color:var(--text-secondary)">v0.4.1</span>
       <button class="btn" onclick="toggleTheme()" style="padding:0.375rem 0.625rem">🌗</button>
     </div>
   </aside>
@@ -644,7 +676,83 @@ body {
         <div class="log-area fade-in" id="logArea">Waiting for events...</div>
       </div>
 
-    </div>
+      <!-- Stage-Gate Monitor -->
+      <div class="page" id="page-stage-gate">
+        <div class="fade-in">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:0.5rem">
+            <div style="display:flex;align-items:center;gap:0.75rem">
+              <span id="sgLlmBadge" class="badge badge-green">🤖 LLM Mode</span>
+              <span id="sgLastUpdate" style="font-size:0.75rem;color:var(--text-secondary)">업데이트 대기 중...</span>
+            </div>
+            <button class="btn" onclick="refreshStageGate()">🔄 새로고침</button>
+          </div>
+          <div class="kpi-card section" style="border-left:4px solid var(--blue)">
+            <div class="section-title">⚡ 활성 워크플로우</div>
+            <div id="sgActiveGoal" style="font-size:0.9375rem;font-weight:700;margin-bottom:1rem;color:var(--text)">현재 활성 태스크가 없습니다</div>
+            <div style="display:flex;gap:0;border-radius:8px;overflow:hidden;margin-bottom:0.75rem">
+              <div id="sgStageGate0" class="sg-stage" data-stage="gate0">Gate 0<br><span>Business</span></div>
+              <div id="sgStageGate1" class="sg-stage" data-stage="gate1">Gate 1<br><span>PRD</span></div>
+              <div id="sgStageDesign" class="sg-stage" data-stage="design">Design</div>
+              <div id="sgStageCode" class="sg-stage" data-stage="code">Code</div>
+              <div id="sgStageDone" class="sg-stage" data-stage="done">✅ Done</div>
+            </div>
+            <div id="sgRoundBadge" class="badge badge-purple" style="font-size:0.6875rem">⏳ 대기 중</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+            <div class="kpi-card">
+              <div class="section-title">💼 Gate 0 — 사업성 검토</div>
+              <div id="sgBusinessReviews"><div style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.8125rem">검토 결과 없음</div></div>
+              <div id="sgGroundingBadge" style="margin-top:0.75rem;display:none"><span class="badge badge-blue">📊 시장 데이터 자동 주입됨</span></div>
+            </div>
+            <div class="kpi-card">
+              <div class="section-title">📄 Gate 1 — PRD 커스토머 심사</div>
+              <div id="sgPRDPanel"><div style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.8125rem">PRD 없음</div></div>
+            </div>
+          </div>
+          <div class="kpi-card section" style="margin-top:1rem">
+            <div class="section-title">📜 최근 게이트 이력</div>
+            <div id="sgHistory"><div style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.8125rem">이력 없음</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cache Stats -->
+      <div class="page" id="page-cache-stats">
+        <div class="fade-in">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
+            <span id="csLastRefresh" style="font-size:0.75rem;color:var(--text-secondary)">마지막 갱신: 대기 중</span>
+            <button class="btn" onclick="refreshCacheStats()">🔄 Refresh</button>
+          </div>
+          <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+            <div class="kpi-card"><div class="kpi-label">캐시 히트율</div><div class="kpi-value" id="csHitRate" style="color:var(--green)">—</div></div>
+            <div class="kpi-card"><div class="kpi-label">MCP Tools</div><div class="kpi-value" id="csMcpCount" style="color:var(--blue)">—</div><div class="kpi-sub">활성화됨</div></div>
+            <div class="kpi-card"><div class="kpi-label">업타임 Uptime</div><div class="kpi-value" id="csUptime" style="color:var(--accent)">—</div></div>
+            <div class="kpi-card"><div class="kpi-label">Gate 역사</div><div class="kpi-value" id="csGateCount" style="color:var(--text-secondary)">—</div><div class="kpi-sub">누적 게이트</div></div>
+          </div>
+          <div class="kpi-card section">
+            <div class="section-title">🌐 Grounding Adapter Status</div>
+            <div id="csAdapters" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:0.75rem">
+              <div class="adapter-card" id="adapterKOSIS">KOSIS <span class="badge badge-orange">확인 중</span></div>
+              <div class="adapter-card" id="adapterNaver">Naver <span class="badge badge-orange">확인 중</span></div>
+              <div class="adapter-card" id="adapterTrends">Trends <span class="badge badge-orange">확인 중</span></div>
+              <div class="adapter-card" id="adapterLaw">Law KR <span class="badge badge-orange">확인 중</span></div>
+              <div class="adapter-card" id="adapterReviews">App Reviews <span class="badge badge-orange">확인 중</span></div>
+              <div class="adapter-card" id="adapterScraper">Scraper <span class="badge badge-green">✅ Ready</span></div>
+            </div>
+          </div>
+          <div class="kpi-card section">
+            <div class="section-title">🔧 MCP Tools</div>
+            <div id="csMcpTools" style="display:flex;flex-wrap:wrap;gap:0.375rem"></div>
+          </div>
+          <div class="kpi-card section">
+            <div class="section-title">📜 Gate 실행 이력 (Server Memory)</div>
+            <div id="csGateLog" style="font-size:0.75rem;max-height:200px;overflow-y:auto">
+              <div style="padding:1rem;text-align:center;color:var(--text-secondary)">없음</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
   </div>
 </div>
 
@@ -663,9 +771,11 @@ function showPage(page) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
   document.querySelector('[data-page="' + page + '"]').classList.add('active');
-  const titles = { dashboard:'📊 Dashboard', kanban:'📋 Kanban Board', tools:'🔧 Tool Registry', personas:'🎭 Personas', chat:'💬 Chat', office:'🎮 Office', terminal:'🖥️ Terminal', inbox:'📨 Decision Inbox', settings:'⚙️ Settings', logs:'📝 Event Log' };
+  const titles = { dashboard:'📊 Dashboard', kanban:'📋 Kanban', tools:'🔧 Tools', personas:'🎭 Personas', chat:'💬 Chat', office:'🎮 Office', terminal:'🖥️ Terminal', inbox:'📨 Decision Inbox', settings:'⚙️ Settings', logs:'📝 Event Log', 'stage-gate':'🔀 Stage-Gate Monitor', 'cache-stats':'📦 Cache Stats' };
   document.getElementById('pageTitle').textContent = titles[page] || page;
   if (page === 'office') renderOffice();
+  if (page === 'stage-gate') refreshStageGate();
+  if (page === 'cache-stats') refreshCacheStats();
 }
 
 // Chat panel
@@ -1026,8 +1136,113 @@ function startPolling() {
   }, 5000);
 }
 
-addLog('Dashboard v0.4.0 loaded');
+addLog('Dashboard v0.4.1 — Stage-Gate + Cache Stats 적용');
 renderDecisions();
+
+// ────── Stage-Gate Monitor ──────
+async function refreshStageGate() {
+  document.getElementById('sgLastUpdate').textContent = '갱신 중...';
+  try {
+    const resp = await fetch('/api/status');
+    const data = await resp.json();
+    const llmOk = data.ollama?.available;
+    const badge = document.getElementById('sgLlmBadge');
+    badge.className = 'badge ' + (llmOk ? 'badge-green' : 'badge-orange');
+    badge.textContent = llmOk ? '🤖 LLM Mode' : '⚙️ Heuristic Mode';
+    const task = data.activeTask;
+    document.getElementById('sgActiveGoal').textContent = task ? task.title : '현재 활성 태스크가 없습니다';
+    const stageMap = { understand:'gate0', prototype:'gate1', validate:'gate1', evolve:'code', report:'done' };
+    const currentStage = task ? stageMap[task.stage || task.status] : null;
+    const stages = [
+      { id: 'sgStageGate0', key: 'gate0' },
+      { id: 'sgStageGate1', key: 'gate1' },
+      { id: 'sgStageDesign', key: 'design' },
+      { id: 'sgStageCode', key: 'code' },
+      { id: 'sgStageDone', key: 'done' },
+    ];
+    const order = stages.map(s => s.key);
+    const idx = order.indexOf(currentStage);
+    stages.forEach((s, i) => {
+      const el = document.getElementById(s.id);
+      if (!el) return;
+      el.className = 'sg-stage';
+      if (idx >= 0 && i < idx) el.classList.add('sg-done');
+      else if (i === idx) el.classList.add('sg-active');
+      else el.classList.add('sg-pending');
+    });
+    document.getElementById('sgRoundBadge').textContent = task ? task.status : '⏳ 대기 중';
+    document.getElementById('sgLastUpdate').textContent = '방금 전 업데이트';
+    // Gate history from /api/gate-history
+    try {
+      const ghResp = await fetch('/api/gate-history');
+      const gh = await ghResp.json();
+      const histEl = document.getElementById('sgHistory');
+      if (gh.length > 0) {
+        histEl.innerHTML = gh.slice(0,5).map(h =>
+          '<div style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem;border-bottom:1px solid var(--border);font-size:0.8125rem">' +
+          '<span class="badge ' + (h.verdict==='PASS'?'badge-green':h.verdict==='PIVOT'?'badge-orange':'badge-red') + '">' + h.verdict + '</span>' +
+          '<span style="flex:1">' + h.goal.slice(0,55) + '</span>' +
+          '<span style="color:var(--text-secondary);font-size:0.6875rem">' + h.time + '</span></div>'
+        ).join('');
+      }
+    } catch {}
+  } catch {
+    document.getElementById('sgLastUpdate').textContent = '연결 실패';
+  }
+}
+
+// ────── Cache Stats ──────
+const adapterDefs = [
+  { id: 'adapterKOSIS',   name: 'KOSIS',   key: 'KOSIS_API_KEY' },
+  { id: 'adapterNaver',   name: 'Naver',   key: 'NAVER_CLIENT_ID' },
+  { id: 'adapterTrends',  name: 'Trends',  key: null },
+  { id: 'adapterLaw',     name: 'Law KR',  key: null },
+  { id: 'adapterReviews', name: 'Reviews', key: 'APP_REVIEWS_KEY' },
+  { id: 'adapterScraper', name: 'Scraper', key: null },
+];
+async function refreshCacheStats() {
+  document.getElementById('csLastRefresh').textContent = '마지막 갱신: ' + new Date().toLocaleTimeString('ko-KR');
+  try {
+    const resp = await fetch('/api/status');
+    const data = await resp.json();
+    // KPIs
+    const tools = data.tools || [];
+    document.getElementById('csMcpCount').textContent = tools.filter(t => t.enabled).length;
+    document.getElementById('csHitRate').textContent = '—'; // 실서버 연동 예정
+    document.getElementById('csUptime').textContent = '✔ Running';
+    // Gate count
+    try {
+      const ghR = await fetch('/api/gate-history');
+      const gh = await ghR.json();
+      document.getElementById('csGateCount').textContent = gh.length;
+      const logEl = document.getElementById('csGateLog');
+      if (gh.length > 0) {
+        logEl.innerHTML = gh.map(h =>
+          '<div style="display:flex;gap:0.5rem;padding:0.375rem 0;border-bottom:1px solid var(--border)">' +
+          '<span class="badge ' + (h.verdict==='PASS'?'badge-green':h.verdict==='PIVOT'?'badge-orange':'badge-red') + '">' + h.verdict + '</span>' +
+          '<span style="flex:1">' + h.goal.slice(0,50) + '</span>' +
+          '<span style="color:var(--text-secondary)">' + h.time + '</span></div>'
+        ).join('');
+      } else {
+        logEl.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--text-secondary)">현 세션에서 게이트 실행 없음</div>';
+      }
+    } catch {}
+    // MCP tools
+    const toolsEl = document.getElementById('csMcpTools');
+    toolsEl.innerHTML = tools.map(t => '<span class="tool-chip ' + (t.enabled?'tool-enabled':'tool-disabled') + '">' + (t.enabled?'✅':'○') + ' ' + t.name + '</span>').join('');
+    // Adapters
+    const envKeys = data.envKeys || {};
+    adapterDefs.forEach(a => {
+      const el = document.getElementById(a.id);
+      if (!el) return;
+      const ok = a.key === null || !!envKeys[a.key];
+      el.className = 'adapter-card ' + (ok ? 'adapter-ok' : 'adapter-off');
+      el.innerHTML = a.name + ' <span class="badge ' + (ok ? 'badge-green' : 'badge-red') + '">' + (ok ? '✅ Ready' : '❌ 미설정') + '</span>';
+    });
+  } catch {
+    document.getElementById('csHitRate').textContent = '연결 실패';
+  }
+}
 </script>
 </body>
 </html>`;
@@ -1037,10 +1252,22 @@ export interface DashboardOptions {
   port?: number;
 }
 
+
 export async function startDashboard(options: DashboardOptions): Promise<void> {
   const { config, port = 3100 } = options;
   const modules = initializeAgent(config);
   const sseClients = new Set<ServerResponse>();
+  const serverStartTime = Date.now(); // for /health uptime
+
+  // Wire CycleRunner → gateHistory (Dashboard Stage-Gate Monitor)
+  (modules.cycleRunner as unknown as { options: { onGateDecision?: (g: string, v: string) => void } })
+    .options.onGateDecision = (goal: string, verdict: string) => {
+      recordGateDecision({
+        goal,
+        verdict: (verdict === 'PASS' ? 'PASS' : 'SKIP') as GateHistoryEntry['verdict'],
+        taskType: 'implementation',
+      });
+    };
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const url = req.url || '/';
@@ -1069,7 +1296,118 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
       return;
     }
 
-    // Terminal action endpoints
+    // Health check endpoint — used by load balancers and monitoring tools
+    if (url === '/health' || url === '/healthz') {
+      const uptimeSec = Math.floor((Date.now() - serverStartTime) / 1000);
+
+      // ── Real module health checks ──────────────────────────────────────────
+      const issues: string[] = [];
+
+      // 1. Ollama (advisory — not critical, just informational)
+      const ollamaAvail = modules.ollamaClient
+        ? await modules.ollamaClient.isAvailable().catch(() => false)
+        : false;
+
+      // 2. Task manager (critical — must be able to queue tasks)
+      let taskQueue: Array<unknown> = [];
+      let taskManagerOk = false;
+      try {
+        taskQueue = await modules.taskManager.getQueue();
+        taskManagerOk = true;
+      } catch (err) {
+        issues.push(`taskManager: ${err instanceof Error ? err.message : 'unavailable'}`);
+      }
+
+      // 3. Obsidian vault (critical — must be able to read/write memory)
+      let obsidianOk = false;
+      try {
+        const { stat } = await import('fs/promises');
+        await stat(config.OBSIDIAN_VAULT_PATH);
+        obsidianOk = true;
+      } catch {
+        issues.push(`obsidian: vault path inaccessible (${config.OBSIDIAN_VAULT_PATH})`);
+      }
+
+      // 4. Version from package.json (non-critical)
+      let version = '0.4.1';
+      try {
+        const { readFile } = await import('fs/promises');
+        const { resolve, dirname } = await import('path');
+        const { fileURLToPath } = await import('url');
+        const __d = dirname(fileURLToPath(import.meta.url));
+        const pkgJson = JSON.parse(await readFile(resolve(__d, '../../package.json'), 'utf-8')) as { version?: string };
+        version = pkgJson.version ?? version;
+      } catch { /* keep fallback */ }
+
+      // ── Determine health status ────────────────────────────────────────────
+      const healthy = taskManagerOk && obsidianOk;   // critical modules must be up
+
+      const body = {
+        status: healthy ? 'ok' : 'degraded',
+        version,
+        uptime: uptimeSec,
+        timestamp: new Date().toISOString(),
+        modules: {
+          ollama: ollamaAvail ? 'online' : 'offline',
+          taskQueue: taskQueue.length,
+          sseClients: sseClients.size,
+          taskManager: taskManagerOk ? 'ok' : 'error',
+          obsidian: obsidianOk ? 'ok' : 'error',
+        },
+        env: {
+          KOSIS_API_KEY: !!process.env['KOSIS_API_KEY'],
+          NAVER_CLIENT_ID: !!process.env['NAVER_CLIENT_ID'],
+          // law-kr, app-reviews: no API key required (public API / scraping)
+        },
+        ...(issues.length > 0 ? { issues } : {}),
+      };
+      res.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(body, null, 2));
+      return;
+    }
+
+    // Gate history endpoints
+    if (url === '/api/gate-history') {
+      if (req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(getGateHistory()));
+        return;
+      }
+      if (req.method === 'POST') {
+        let body = '';
+        req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+        req.on('end', () => {
+          try {
+            const entry = JSON.parse(body) as Omit<GateHistoryEntry, 'time' | 'ts'>;
+            recordGateDecision(entry);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, count: getGateHistory().length }));
+          } catch {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Invalid body' }));
+          }
+        });
+        return;
+      }
+    }
+
+    // Monitoring Stack — error/warn log
+    if (url === '/api/errors') {
+      if (req.method === 'GET') {
+        const limit = 50;
+        const logs = getErrorLog().slice(0, limit);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ count: logs.length, logs }));
+        return;
+      }
+      if (req.method === 'DELETE') {
+        clearErrorLog();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, message: 'Error log cleared' }));
+        return;
+      }
+    }
+
     if (url?.startsWith('/api/action/') && req.method === 'POST') {
       const action = url.split('/').pop() || '';
       const allowedActions: Record<string, string> = {
@@ -1225,7 +1563,8 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
     } catch (err) {
       log.warn('SSE broadcast error', err);
     }
-  }, 5000);
+  }, 10_000); // 10s — persona(30s TTL cached) + ollama(30s TTL cached); no need for 5s
+
 
   server.listen(port, () => {
     log.info(`🐾 Dashboard running at http://localhost:${port}`);
