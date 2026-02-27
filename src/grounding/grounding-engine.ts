@@ -72,6 +72,11 @@ export class GroundingEngine {
   private appReviews: AppReviewsAdapter;
   private webScraper: WebScraperAdapter;
 
+  // ── Cache stats (in-memory, resets on process restart) ──
+  private _resultCache: Map<string, { result: GroundingResult; expiresAt: number }> = new Map();
+  private _stats = { hits: 0, misses: 0, totalLatencyMs: 0, calls: 0 };
+  private static readonly CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
   constructor(options: GroundingEngineOptions = {}) {
     this.minThreshold = options.minGroundingThreshold || 0.7;
 
@@ -90,20 +95,37 @@ export class GroundingEngine {
 
   /**
    * Analyze text and verify factual claims above threshold.
+   * Results are cached by input text for 24h to reduce API calls.
    */
   async ground(text: string): Promise<GroundingResult> {
+    const t0 = Date.now();
+    this._stats.calls++;
+
+    // Cache lookup
+    const cacheKey = text.slice(0, 200);
+    const cached = this._resultCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      this._stats.hits++;
+      log.debug('Grounding cache hit', { textLength: text.length });
+      return cached.result;
+    }
+    this._stats.misses++;
+
     log.info('Starting grounding process', { textLength: text.length });
 
     // Step 1: Detect gaps
     const analysis = detectGaps(text);
 
     if (analysis.claims.length === 0) {
-      return {
+      const result: GroundingResult = {
         analysis,
         verifications: [],
         status: 'no_claims',
         summary: 'No factual claims detected.',
       };
+      this._resultCache.set(cacheKey, { result, expiresAt: Date.now() + GroundingEngine.CACHE_TTL_MS });
+      this._stats.totalLatencyMs += Date.now() - t0;
+      return result;
     }
 
     // Step 2: Filter claims above threshold
@@ -133,7 +155,24 @@ export class GroundingEngine {
 
     log.info(summary);
 
-    return { analysis, verifications, status, summary };
+    const result: GroundingResult = { analysis, verifications, status, summary };
+    this._resultCache.set(cacheKey, { result, expiresAt: Date.now() + GroundingEngine.CACHE_TTL_MS });
+    this._stats.totalLatencyMs += Date.now() - t0;
+    return result;
+  }
+
+  /**
+   * Return cache statistics for the dashboard Cache Stats panel.
+   */
+  getStats(): { hitRate: number; callCount: number; avgLatencyMs: number; cacheSize: number } {
+    const { hits, misses, totalLatencyMs, calls } = this._stats;
+    const total = hits + misses;
+    return {
+      hitRate: total === 0 ? 0 : Math.round((hits / total) * 100),
+      callCount: calls,
+      avgLatencyMs: calls === 0 ? 0 : Math.round(totalLatencyMs / calls),
+      cacheSize: this._resultCache.size,
+    };
   }
 
   /**

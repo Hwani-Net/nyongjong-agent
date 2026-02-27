@@ -21,6 +21,32 @@ const DIM = '\x1b[2m';
 
 let globalLevel: LogLevel = 'info';
 
+// ── Monitoring ring buffer (max 200 entries) ──
+export interface ErrorLogEntry {
+  ts: number;
+  time: string;
+  level: 'warn' | 'error';
+  module: string;
+  message: string;
+  data?: string;
+}
+const ERROR_BUFFER_MAX = 200;
+const errorBuffer: ErrorLogEntry[] = [];
+
+/**
+ * Get the current error/warn log buffer (newest first).
+ */
+export function getErrorLog(): ErrorLogEntry[] {
+  return [...errorBuffer];
+}
+
+/**
+ * Clear the error log buffer.
+ */
+export function clearErrorLog(): void {
+  errorBuffer.length = 0;
+}
+
 /**
  * Set the global log level threshold.
  */
@@ -43,6 +69,20 @@ export function createLogger(module: string) {
       console.error(`${prefix} ${message}`, typeof data === 'string' ? data : JSON.stringify(data, null, 2));
     } else {
       console.error(`${prefix} ${message}`);
+    }
+
+    // Push warn/error events to monitoring buffer
+    if (level === 'warn' || level === 'error') {
+      const entry: ErrorLogEntry = {
+        ts: Date.now(),
+        time: timestamp,
+        level,
+        module,
+        message,
+        data: data !== undefined ? (typeof data === 'string' ? data : JSON.stringify(data)) : undefined,
+      };
+      errorBuffer.unshift(entry);
+      if (errorBuffer.length > ERROR_BUFFER_MAX) errorBuffer.pop();
     }
   }
 

@@ -23,6 +23,16 @@ export interface ObsidianStoreOptions {
 export class ObsidianStore {
   private vaultPath: string;
 
+  /**
+   * In-memory cache: path → { note, mtimeMs }
+   * Mirrors Firestore's IndexedDB persistence — first load reads all files,
+   * subsequent loads only re-read files whose mtime has changed (delta sync).
+   */
+  private noteCache = new Map<string, { note: NoteData; mtimeMs: number }>();
+
+  /** Cache hit/miss stats for monitoring */
+  private cacheStats = { hits: 0, misses: 0, invalidations: 0 };
+
   constructor(options: ObsidianStoreOptions) {
     this.vaultPath = resolve(options.vaultPath);
     log.info('ObsidianStore initialized', { vaultPath: this.vaultPath });
@@ -37,19 +47,45 @@ export class ObsidianStore {
 
   /**
    * Read a markdown note and parse its YAML frontmatter.
+   * Uses mtime-based delta sync: if the file hasn't changed since last read,
+   * returns the cached version (same principle as Firestore IndexedDB persistence).
    */
   async readNote(relativePath: string): Promise<NoteData> {
     const fullPath = this.resolvePath(relativePath);
-    log.debug(`Reading note: ${relativePath}`);
+
+    // Get current file mtime
+    const fileStat = await stat(fullPath);
+    const currentMtime = fileStat.mtimeMs;
+
+    // Check cache: if mtime matches, return cached note (delta sync)
+    const cached = this.noteCache.get(relativePath);
+    if (cached && cached.mtimeMs === currentMtime) {
+      this.cacheStats.hits++;
+      log.debug(`Cache hit (mtime unchanged): ${relativePath}`);
+      return cached.note;
+    }
+
+    // Cache miss or file changed — re-read and parse
+    if (cached) {
+      this.cacheStats.invalidations++;
+      log.debug(`Cache invalidated (mtime changed): ${relativePath}`);
+    } else {
+      this.cacheStats.misses++;
+    }
 
     const raw = await readFile(fullPath, 'utf-8');
     const parsed = matter(raw);
 
-    return {
+    const note: NoteData = {
       path: relativePath,
       frontmatter: parsed.data as Record<string, unknown>,
       content: parsed.content.trim(),
     };
+
+    // Store in cache with current mtime
+    this.noteCache.set(relativePath, { note, mtimeMs: currentMtime });
+
+    return note;
   }
 
   /**
@@ -76,6 +112,16 @@ export class ObsidianStore {
     }
 
     await writeFile(fullPath, output, 'utf-8');
+
+    // Update cache with new content and mtime
+    const newStat = await stat(fullPath);
+    const note: NoteData = {
+      path: relativePath,
+      frontmatter: frontmatter ?? {},
+      content,
+    };
+    this.noteCache.set(relativePath, { note, mtimeMs: newStat.mtimeMs });
+
     log.info(`Note written: ${relativePath}`);
   }
 
@@ -173,6 +219,7 @@ export class ObsidianStore {
     const fullPath = this.resolvePath(relativePath);
     try {
       await unlink(fullPath);
+      this.noteCache.delete(relativePath);
       log.info(`Deleted note: ${relativePath}`);
       return true;
     } catch (err: any) {
@@ -182,5 +229,26 @@ export class ObsidianStore {
       }
       throw err;
     }
+  }
+
+  /**
+   * Get cache performance statistics.
+   * Useful for monitoring delta sync effectiveness.
+   */
+  getCacheStats(): { hits: number; misses: number; invalidations: number; size: number } {
+    return {
+      ...this.cacheStats,
+      size: this.noteCache.size,
+    };
+  }
+
+  /**
+   * Clear the entire note cache.
+   * Forces full re-read on next access (like Firestore cache clear).
+   */
+  clearNoteCache(): void {
+    this.noteCache.clear();
+    this.cacheStats = { hits: 0, misses: 0, invalidations: 0 };
+    log.info('Note cache cleared');
   }
 }
