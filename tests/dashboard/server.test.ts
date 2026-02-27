@@ -92,10 +92,10 @@ describe('Dashboard Server', () => {
       }
     });
 
-    it('should contain v0.4.1 version reference', async () => {
+    it('should contain v0.5.0 version reference', async () => {
       const fs = await import('fs/promises');
       const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
-      expect(content).toContain('v0.4.1');
+      expect(content).toContain('v0.5.0');
     });
   });
 

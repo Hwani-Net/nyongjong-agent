@@ -1599,6 +1599,22 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
             reply = `📡 Grounding 어댑터 상태:\n${adapterLines}\n\n🟢 = API 사용 가능 | 🔴 = API 키 필요\n\n무료 어댑터: LawKR (법령정보), GoogleTrends\nAPI 키 필요: KOSIS, Naver Search`;
             action = 'adapter_status';
 
+          } else if (lowerMsg.includes('게이트') || lowerMsg.includes('gate') || lowerMsg.includes('사이클') || lowerMsg.includes('cycle')) {
+            // ── V-5 E2E Demo: Run a full cycle via Dashboard's CycleRunner ──
+            // This records gate history in the Dashboard server's shared-state
+            const goalText = message.replace(/게이트|gate|사이클|cycle/gi, '').trim()
+              || 'E2E 데모 테스트: Stage-Gate 파이프라인 검증';
+            try {
+              const cycleReport = await modules.cycleRunner.run({ goal: goalText });
+              const { totalDurationMs } = modules.cycleRunner.getState();
+              const gateHistory = getGateHistory();
+              reply = `🔄 Stage-Gate 사이클 완료!\n\n📊 결과: ${cycleReport.status}\n⏱️ 소요 시간: ~${Math.round(totalDurationMs / 1000)}초\n\n🏛️ Gate History (${gateHistory.length}건):\n${gateHistory.slice(0, 3).map(h => `• [${h.verdict}] ${h.goal.slice(0, 40)} (${h.time})`).join('\n') || '기록 없음'}\n\n💡 "Cache Stats" 페이지에서 Gate History를 확인하세요!`;
+              action = 'gate_cycle_run';
+            } catch (e) {
+              reply = `⚠️ 사이클 실행 중 오류: ${e instanceof Error ? e.message : String(e)}`;
+              action = 'gate_cycle_error';
+            }
+
           } else if (lowerMsg.includes('페르소나') || lowerMsg.includes('persona')) {
             const personas = await modules.personaLoader.loadAll();
             reply = `현재 ${personas.length}개 페르소나가 등록되어 있습니다:\n${personas.map((p: { name: string; category: string }) => `• ${p.name} (${p.category})`).join('\n')}`;

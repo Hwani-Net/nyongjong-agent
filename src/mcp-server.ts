@@ -110,11 +110,15 @@ export function createMcpServer(options: McpServerOptions): McpServer {
 
   // Initialize workflow
   const shellRunner = new ShellRunner();
-  const cycleRunner = new CycleRunner({
+  // NOTE: cycleRunner is created per-call in run_cycle tool to ensure:
+  //   1. Fresh state isolation between runs
+  //   2. personaEngine + personaSimulator are injected for Gate 0/1
+  // The module-level instance is kept for type reference only.
+  const _cycleRunnerDefaults = {
     maxRetries: 3,
     projectRoot: PROJECT_ROOT,
-    runShell: (cmd, cwd) => shellRunner.run(cmd, cwd),
-  });
+    runShell: (cmd: string, cwd: string) => shellRunner.run(cmd, cwd),
+  };
 
   // ═══════════════════════════════════════
   // META TOOLS (always enabled, group: core)
@@ -677,7 +681,28 @@ export function createMcpServer(options: McpServerOptions): McpServer {
         return { content: [{ type: 'text' as const, text: registry.disabledMessage('run_cycle') }] };
       }
       log.info('run_cycle called', { goal: params.goal.slice(0, 80) });
-      const report = await cycleRunner.run({ goal: params.goal, projectContext: params.projectContext });
+
+      // ── V-1 Fix: inject personaEngine + personaSimulator into CycleRunner ──
+      // Creating a fresh CycleRunner per call ensures:
+      //   1. Gate 0 (business viability) actually runs for new features
+      //   2. Gate 1 (PRD elicitation) runs with persona feedback
+      //   3. Gate decisions are recorded in shared-state → Dashboard
+      const runner = new CycleRunner({
+        ..._cycleRunnerDefaults,
+        personaEngine,
+        personaSimulator,
+        onGateDecision: (goal, verdict) => {
+          // Final cycle verdict → Gate History (covers SKIP path via run_cycle)
+          const analysis = analyzeGoal({ goal });
+          recordGateDecision({
+            goal,
+            verdict: verdict as 'PASS' | 'FAIL' | 'SKIP' | 'PIVOT',
+            taskType: analysis.analysis.taskType,
+          });
+        },
+      });
+
+      const report = await runner.run({ goal: params.goal, projectContext: params.projectContext });
       return { content: [{ type: 'text' as const, text: report.markdown }] };
     },
   );

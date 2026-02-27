@@ -364,15 +364,15 @@ function analyzeCeoView(
   // Paid API dependency → PIVOT warning
   const hasCostRisk = risks.some(r => r.includes('외부 API'));
 
-  // Production risk → FAIL for now
+  // Production risk → PIVOT (사전 승인 권고, FAIL이 아님)
   const hasProductionRisk = risks.some(r => r.includes('프로덕션'));
 
   if (hasProductionRisk) {
     return {
       personaId,
       personaName,
-      verdict: 'FAIL',
-      feedback: '프로덕션 환경 대상 작업은 사전 승인 필수. 위험 부담이 너무 큽니다.',
+      verdict: 'PIVOT',
+      feedback: '프로덕션 환경 관련 작업 — 대표님 사전 검토 후 진행 권장. 스테이징에서 먼저 검증하세요.',
     };
   }
 
@@ -469,11 +469,11 @@ function aggregateVerdicts(reviews: BusinessReview[]): BusinessGateResult {
   const pivotReviews = reviews.filter(r => r.verdict === 'PIVOT');
   const passReviews = reviews.filter(r => r.verdict === 'PASS');
 
-  // Any FAIL → overall FAIL
-  if (failReviews.length > 0) {
+  // 과반수(50%+) FAIL 시에만 → overall FAIL (1명 FAIL로 전체 중단 방지)
+  if (failReviews.length > 0 && failReviews.length > reviews.length / 2) {
     return {
       verdict: 'FAIL',
-      reason: `사업성 검토 불합격: ${failReviews.map(r => r.feedback).join(' | ')}`,
+      reason: `사업성 검토 불합격 (${failReviews.length}/${reviews.length}명): ${failReviews.map(r => r.feedback).join(' | ')}`,
       reviews,
     };
   }

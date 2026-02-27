@@ -14,7 +14,9 @@ import { ShellRunner } from './execution/shell-runner.js';
 import { TestRunner } from './execution/test-runner.js';
 import { GitWorktree } from './execution/git-worktree.js';
 import { ToolRegistry } from './core/tool-registry.js';
-import { getGateHistory, getLastGate, getLastPRD } from './core/shared-state.js';
+import { getGateHistory, getLastGate, getLastPRD, recordGateDecision } from './core/shared-state.js';
+import { analyzeGoal } from './workflow/understand.js';
+import { shouldRunBusinessGate, runBusinessGate } from './workflow/business-gate.js';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 
@@ -76,11 +78,21 @@ export function initializeAgent(config: AppConfig): AgentModules {
   const testRunner = new TestRunner({ shellRunner, projectRoot: PROJECT_ROOT });
   const gitWorktree = new GitWorktree({ repoPath: PROJECT_ROOT, shellRunner });
 
-  // Workflow
+  // Workflow (inject personaEngine + personaSimulator for Gate 0/1)
   const cycleRunner = new CycleRunner({
     maxRetries: 3,
     projectRoot: PROJECT_ROOT,
-    runShell: (cmd, cwd) => shellRunner.run(cmd, cwd),
+    runShell: (cmd: string, cwd: string) => shellRunner.run(cmd, cwd),
+    personaEngine,
+    personaSimulator,
+    onGateDecision: (goal: string, verdict: string) => {
+      const analysis = analyzeGoal({ goal });
+      recordGateDecision({
+        goal,
+        verdict: verdict as 'PASS' | 'FAIL' | 'SKIP' | 'PIVOT',
+        taskType: analysis.analysis.taskType,
+      });
+    },
   });
 
   // Tool Registry — single source of truth for all MCP tools

@@ -29,6 +29,11 @@ All notable changes to this project will be documented in this file.
 - `/health` env: removed `LAW_API_KEY` / `APP_REVIEWS_KEY` (no API key needed adapters)
 - `.env.example`: documented all key-free adapters
 - Test count: 243 → **246** (3 new /health degraded tests)
+- **Gate 0 verdict logic** — `hasProductionRisk: FAIL → PIVOT` (사전 승인 권고로 완화)
+- **Gate 0 aggregation** — `any FAIL → FAIL` → **과반수(50%+) FAIL** 시에만 FAIL (1명 이상 동의 필요)
+- **Dashboard Chat `게이트` 명령** — Dashboard에서 직접 `run_cycle` 실행, 동일 프로세스 Gate History 기록
+- **`CycleRunner` 의존성 주입** — `personaEngine` + `personaSimulator` + `onGateDecision` 콜백 완전 연동
+
 
 ## [0.4.0-rc1] - 2026-02-27
 
