@@ -478,7 +478,7 @@ body {
       </div>
     </nav>
     <div class="sidebar-footer">
-      <span style="font-size:0.75rem; color:var(--text-secondary)">v0.4.1</span>
+      <span id="sidebarVersion" style="font-size:0.75rem; color:var(--text-secondary)">v—</span>
       <button class="btn" onclick="toggleTheme()" style="padding:0.375rem 0.625rem">🌗</button>
     </div>
   </aside>
@@ -963,6 +963,9 @@ function updateDashboard(data) {
   // KPIs
   document.getElementById('kpiStatus').textContent = '✅ Online';
   document.getElementById('kpiVersion').textContent = 'v' + (data.version || '?');
+  // Sidebar version badge (dynamic)
+  const sv = document.getElementById('sidebarVersion');
+  if (sv && data.version) sv.textContent = 'v' + data.version;
 
   // Ollama
   const ollama = data.modules?.ollama;
@@ -1154,7 +1157,7 @@ function startPolling() {
   }, 5000);
 }
 
-addLog('Dashboard v0.4.1 — Stage-Gate + Cache Stats 적용');
+addLog('Dashboard v0.5.0 — Stage-Gate + Cache Stats + Error Log 적용');
 renderDecisions();
 
 // ────── Stage-Gate Monitor ──────
@@ -1414,7 +1417,7 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
       }
 
       // 4. Version from package.json (non-critical)
-      let version = '0.4.1';
+      let version = '0.5.0';
       try {
         const { readFile } = await import('fs/promises');
         const { resolve, dirname } = await import('path');
