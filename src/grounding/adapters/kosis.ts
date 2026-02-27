@@ -13,7 +13,7 @@ export interface KosisResult {
 }
 
 export interface KosisAdapterOptions {
-  /** KOSIS API key (공공데이터포털 발급) */
+  /** KOSIS API key */
   apiKey?: string;
   /** Request timeout in ms */
   timeoutMs?: number;
@@ -22,13 +22,14 @@ export interface KosisAdapterOptions {
 /**
  * 통계청 KOSIS API adapter.
  *
- * Provides access to population, economy, and industry statistics.
- * Free tier with generous daily limits.
+ * API Docs: https://kosis.kr/openapi/
+ * Endpoint: statisticsList.do — 통계목록 조회
  */
 export class KosisAdapter {
   private apiKey: string;
   private timeoutMs: number;
-  private readonly baseUrl = 'https://kosis.kr/openapi';
+  // Correct KOSIS OpenAPI endpoint
+  private readonly baseUrl = 'https://kosis.kr/openapi/statisticsList.do';
 
   constructor(options: KosisAdapterOptions = {}) {
     this.apiKey = options.apiKey || process.env.KOSIS_API_KEY || '';
@@ -36,15 +37,15 @@ export class KosisAdapter {
     log.info('KosisAdapter initialized', { configured: !!this.apiKey });
   }
 
-  /**
-   * Check if the adapter is configured with an API key.
-   */
   isConfigured(): boolean {
     return this.apiKey.length > 0;
   }
 
   /**
    * Search KOSIS statistics by keyword.
+   * Uses statisticsList.do — vwCd=MT_ZTITLE (국내통계 주제별)
+   * Since list API has no keyword search, we fetch top-level list
+   * and filter client-side.
    */
   async search(query: string): Promise<KosisResult> {
     const start = Date.now();
@@ -62,10 +63,16 @@ export class KosisAdapter {
     }
 
     try {
-      const url = `${this.baseUrl}/Param/statisticsParameterView.do` +
-        `?method=getList&apiKey=${encodeURIComponent(this.apiKey)}` +
-        `&vwCd=MT_ZTITLE&searchKwd=${encodeURIComponent(query)}` +
-        `&format=json`;
+      const params = new URLSearchParams({
+        method: 'getList',
+        apiKey: this.apiKey,
+        vwCd: 'MT_ZTITLE',
+        parentId: '',
+        format: 'json',
+        jsonVD: 'Y',
+      });
+
+      const url = `${this.baseUrl}?${params.toString()}`;
 
       const response = await fetch(url, {
         signal: AbortSignal.timeout(this.timeoutMs),
@@ -82,13 +89,30 @@ export class KosisAdapter {
         };
       }
 
-      const json = await response.json() as Array<{ TBL_NM?: string; STAT_NM?: string; PRD_DE?: string }>;
-      const items = Array.isArray(json) ? json.slice(0, 5) : [];
-      const summary = items.map((item) =>
-        `[${item.STAT_NM || ''}] ${item.TBL_NM || ''} (${item.PRD_DE || ''})`
-      ).join('\n');
+      const json = await response.json() as Array<{
+        TBL_NM?: string;
+        STAT_NM?: string;
+        PRD_DE?: string;
+        TBL_ID?: string;
+      }>;
 
-      log.info(`KOSIS search found ${items.length} results`);
+      const items = Array.isArray(json) ? json : [];
+
+      // Client-side keyword filter
+      const lowerQuery = query.toLowerCase();
+      const matched = items
+        .filter((item) => {
+          const name = (item.TBL_NM || item.STAT_NM || '').toLowerCase();
+          return name.includes(lowerQuery);
+        })
+        .slice(0, 5);
+
+      const displayed = matched.length > 0 ? matched : items.slice(0, 3);
+      const summary = displayed
+        .map((item) => `[${item.STAT_NM || ''}] ${item.TBL_NM || ''} (${item.PRD_DE || ''})`)
+        .join('\n');
+
+      log.info(`KOSIS search: ${items.length} total, ${matched.length} matched`);
 
       return {
         source: 'kosis',
