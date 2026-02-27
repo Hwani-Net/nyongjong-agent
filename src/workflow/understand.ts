@@ -174,3 +174,130 @@ export function analyzeGoal(input: UnderstandInput): UnderstandOutput {
     suggestedPersonas,
   };
 }
+
+// ─── PRD Elicitation Support Functions ───
+
+export type AmbiguityType = 'priority' | 'techStack' | 'scope' | 'successCriteria' | 'targetUser';
+
+export interface Ambiguity {
+  type: AmbiguityType;
+  question: string;
+  options: string[];
+}
+
+/**
+ * Detect ambiguous/missing information in a goal analysis.
+ * Returns up to 3 items (to prevent PRD Fatigue).
+ */
+export function detectAmbiguities(
+  analysis: UnderstandOutput,
+  goal: string,
+  projectContext?: string,
+): Ambiguity[] {
+  const gaps: Ambiguity[] = [];
+
+  // 1. Complex tasks without priority order
+  if (
+    (analysis.analysis.complexity === 'high' || analysis.analysis.complexity === 'critical')
+    && !/우선|먼저|첫\s?번째|1차|MVP/i.test(goal)
+  ) {
+    gaps.push({
+      type: 'priority',
+      question: '이번 버전에서 가장 중요한 기능은?',
+      options: analysis.analysis.keyRequirements.slice(0, 3),
+    });
+  }
+
+  // 2. Architecture task without tech stack
+  if (
+    analysis.analysis.taskType === 'architecture'
+    && !/tailwind|shadcn|vanilla|react|vue|next/i.test(goal)
+  ) {
+    gaps.push({
+      type: 'techStack',
+      question: '기술 스택 선택:',
+      options: ['React + Tailwind + Shadcn', 'React + Vanilla CSS', '기존 프로젝트 스택 유지'],
+    });
+  }
+
+  // 3. New project without scope boundary
+  if (
+    !projectContext
+    && analysis.analysis.scope === '새 프로젝트'
+    && !/이번\s?버전|1차|MVP|제외|안\s?할/i.test(goal)
+  ) {
+    gaps.push({
+      type: 'scope',
+      question: '이번 버전에서 제외할 것은?',
+      options: ['모바일 최적화', '다국어 지원', '실시간 동기화', '없음 — 전부 포함'],
+    });
+  }
+
+  // 4. No success criteria mentioned
+  if (!/기준|목표|KPI|성공|완료\s?조건|지표/i.test(goal)) {
+    gaps.push({
+      type: 'successCriteria',
+      question: '성공 기준은?',
+      options: ['빠른 빌드 (에러 0개)', '사용자 3초 내 이해', '매출 기여', '기타 (자유 입력)'],
+    });
+  }
+
+  // 5. No target user specified
+  if (!/사용자|고객|유저|target|타겟|대상/i.test(goal)) {
+    gaps.push({
+      type: 'targetUser',
+      question: '주 사용자는 누구인가요?',
+      options: ['대표님 본인 (1인 사용)', '내부 팀', '일반 소비자', '기업 고객 (B2B)'],
+    });
+  }
+
+  // Return max 3 to prevent fatigue
+  return gaps.slice(0, 3);
+}
+
+/**
+ * Generate human-readable options for presentation.
+ */
+export function generateOptions(ambiguities: Ambiguity[]): string {
+  if (ambiguities.length === 0) {
+    return '불명확한 포인트 없음 — PRD 바로 생성 가능';
+  }
+
+  const lines: string[] = ['## 📋 PRD 보강을 위한 질문\n'];
+
+  ambiguities.forEach((amb, i) => {
+    lines.push(`**Q${i + 1}. ${amb.question}**`);
+    amb.options.forEach((opt, j) => {
+      const letter = String.fromCharCode(65 + j); // A, B, C...
+      lines.push(`  ${letter}) ${opt}`);
+    });
+    lines.push('');
+  });
+
+  lines.push('> 💬 추가 의견이 있으시면 자유롭게 입력해 주세요.');
+
+  return lines.join('\n');
+}
+
+/**
+ * Format analysis output for PRD consumption.
+ */
+export function formatAnalysisForPRD(analysis: UnderstandOutput): string {
+  const { taskType, complexity, scope, keyRequirements, risks } = analysis.analysis;
+
+  return [
+    `## 목표 분석 결과`,
+    `- **유형:** ${taskType}`,
+    `- **복잡도:** ${complexity}`,
+    `- **범위:** ${scope}`,
+    '',
+    `### 핵심 요구사항`,
+    ...keyRequirements.map(r => `- ${r}`),
+    '',
+    `### 리스크`,
+    ...risks.map(r => `- ${r}`),
+    '',
+    `### 페르소나 질문`,
+    ...analysis.personaQuestions.map((q, i) => `${i + 1}. ${q}`),
+  ].join('\n');
+}
