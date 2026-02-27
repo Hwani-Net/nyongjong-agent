@@ -1,6 +1,6 @@
 {
   "name": "naedon-agent",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "뇽죵이 에이전트 — AI-native autonomous agent server with MCP protocol, Obsidian memory, multi-model support, and dynamic persona system",
   "type": "module",
   "main": "dist/index.js",

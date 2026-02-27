@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-02-27
+
+### 🔥 Stage-Gate Workflow + Dashboard Health Checks
+
+**246/246 unit tests, E2E 6 scenarios, 0 defects**
+
+### Added
+- **Stage-Gate system** — 7-stage pipeline (Understand → Gate 0 → Gate 1 → Prototype → Validate → Evolve → Report)
+  - `business-gate.ts`: Gate 0 business viability with persona reviews (PASS/PIVOT/FAIL)
+  - `prd-elicitation.ts`: Gate 1 PRD customer self-healing loop (up to maxRounds)
+  - `feedback-router.ts`: feedback classify and rollback routing
+  - Auto-skip for bug fixes / refactoring / docs / simple tasks
+- **shared-state.ts** — centralized in-memory store (gateHistory, lastGate, lastPRD)
+  - Prevents circular imports between `mcp-server.ts` and `dashboard/server.ts`
+  - `clearGateHistory()` for E2E test isolation
+- **Error ring buffer** (max 200) — `getErrorLog()` / `clearErrorLog()` via logger.ts
+- **`/api/errors`** endpoint — GET (ring buffer) + DELETE (clear)
+- **`/health` degraded** — real module checks (taskManager + obsidian) → 503 + `issues[]` if critical
+- **Dynamic versioning** — version read from `package.json` (no more hardcoded strings)
+- **E2E demo v2** — 6 scenarios (Gate FAIL abort, CycleRunner full pipeline, shared-state ring buffer)
+
+### Changed
+- `getAgentStatus()` Ollama healthCheck → **30s module-level cache** (12 HTTP req/min → 2)
+- SSE broadcast interval `5s → 10s` (persona 30s TTL + ollama 30s cache = 5s redundant)
+- `/health` env: removed `LAW_API_KEY` / `APP_REVIEWS_KEY` (no API key needed adapters)
+- `.env.example`: documented all key-free adapters
+- Test count: 243 → **246** (3 new /health degraded tests)
+
 ## [0.4.0-rc1] - 2026-02-27
 
 ### 🏆 Ralph Mode — Full Verification Complete
