@@ -21,6 +21,7 @@ import { createLogger } from './utils/logger.js';
 import { recordGateDecision, setLastGate, setLastPRD } from './core/shared-state.js';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
+import { readFileSync } from 'fs';
 
 const log = createLogger('mcp-server');
 
@@ -29,6 +30,16 @@ const log = createLogger('mcp-server');
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PROJECT_ROOT = resolve(__dirname, '..');
+
+// Dynamic version from package.json (never hardcode)
+const AGENT_VERSION: string = (() => {
+  try {
+    const pkg = JSON.parse(readFileSync(resolve(PROJECT_ROOT, 'package.json'), 'utf-8')) as { version: string };
+    return pkg.version;
+  } catch {
+    return '0.0.0';
+  }
+})();
 
 export interface McpServerOptions {
   config: AppConfig;
@@ -44,7 +55,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
 
   const server = new McpServer({
     name: 'nongjong-agent',
-    version: '0.4.0',
+    version: AGENT_VERSION,
   });
 
   // ─── Tool Registry (runtime toggle) ───
@@ -138,7 +149,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
           type: 'text' as const,
           text: JSON.stringify({
             status: 'running',
-            version: '0.4.0',
+            version: AGENT_VERSION,
             activeTask: activeTask ? { id: activeTask.id, title: activeTask.title } : null,
             obsidianVault: config.OBSIDIAN_VAULT_PATH,
             ollamaUrl: config.OLLAMA_URL,
