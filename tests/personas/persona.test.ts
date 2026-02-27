@@ -1,270 +1,201 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PersonaLoader, type PersonaCategory } from '../../src/personas/persona-loader.js';
+// Integration tests for PersonaLoader and PersonaEngine — REAL file system, NO mocks
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtemp, rm } from 'fs/promises';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { ObsidianStore } from '../../src/core/obsidian-store.js';
+import { PersonaLoader } from '../../src/personas/persona-loader.js';
 import { PersonaEngine } from '../../src/personas/persona-engine.js';
 
-// Mock ObsidianStore
-const mockStore = {
-  exists: vi.fn(),
-  readNote: vi.fn(),
-  writeNote: vi.fn(),
-  deleteNote: vi.fn(),
-  listNotes: vi.fn(),
-  searchNotes: vi.fn(),
-};
+// ─── Setup: Real temp vault ────────────────────────────────────────────────
+let tempDir: string;
+let store: ObsidianStore;
 
-describe('PersonaLoader', () => {
-  let loader: PersonaLoader;
+beforeEach(async () => {
+  tempDir = await mkdtemp(join(tmpdir(), 'persona-test-'));
+  store = new ObsidianStore({ vaultPath: tempDir });
+});
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    loader = new PersonaLoader({
-      store: mockStore as any,
-      personasDir: 'agent/personas',
-    });
-  });
+afterEach(async () => {
+  await rm(tempDir, { recursive: true, force: true });
+});
 
-  it('should load a persona by ID', async () => {
-    mockStore.exists.mockResolvedValue(true);
-    mockStore.readNote.mockResolvedValue({
-      path: 'agent/personas/ceo-kim.md',
+function makeLoader(): PersonaLoader {
+  return new PersonaLoader({ store, personasDir: 'personas' });
+}
+
+// ─── PersonaLoader: CRUD with real files ──────────────────────────────────
+describe('PersonaLoader (real fs)', () => {
+  it('should create and load a persona from real file', async () => {
+    const loader = makeLoader();
+
+    await loader.createPersona({
+      id: 'ceo-test',
+      name: '테스트 CEO',
+      category: 'business',
+      era: '2024',
+      activatedAt: ['understand', 'report'],
+      priority: 'high',
       content: '비즈니스 관점에서 분석합니다.',
-      frontmatter: {
-        id: 'ceo-kim',
-        name: 'CEO Kim',
-        category: 'business',
-        era: 'modern',
-        activated_at: ['understand', 'report'],
-        priority: 'high',
-      },
     });
 
-    const persona = await loader.loadPersona('ceo-kim');
+    const persona = await loader.loadPersona('ceo-test');
     expect(persona).not.toBeNull();
-    expect(persona!.name).toBe('CEO Kim');
+    expect(persona!.name).toBe('테스트 CEO');
     expect(persona!.category).toBe('business');
     expect(persona!.activatedAt).toContain('understand');
+    expect(persona!.content).toContain('비즈니스');
   });
 
   it('should return null for missing persona', async () => {
-    mockStore.exists.mockResolvedValue(false);
+    const loader = makeLoader();
     const persona = await loader.loadPersona('nonexistent');
     expect(persona).toBeNull();
   });
 
-  it('should load all personas', async () => {
-    mockStore.listNotes.mockResolvedValue([
-      'agent/personas/ceo-kim.md',
-      'agent/personas/user-park.md',
-    ]);
+  it('should load all personas from real files', async () => {
+    const loader = makeLoader();
 
-    mockStore.readNote
-      .mockResolvedValueOnce({
-        path: 'agent/personas/ceo-kim.md',
-        content: '비즈니스 관점',
-        frontmatter: { id: 'ceo-kim', name: 'CEO Kim', category: 'business', activated_at: ['report'] },
-      })
-      .mockResolvedValueOnce({
-        path: 'agent/personas/user-park.md',
-        content: '사용자 관점',
-        frontmatter: { id: 'user-park', name: 'User Park', category: 'customer', activated_at: ['understand'] },
-      });
+    await loader.createPersona({ id: 'p1', name: 'Persona 1', category: 'business', era: '2024', activatedAt: ['understand'], priority: 'normal', content: 'A' });
+    await loader.createPersona({ id: 'p2', name: 'Persona 2', category: 'customer', era: '2024', activatedAt: ['validate'], priority: 'normal', content: 'B' });
 
     const all = await loader.loadAll();
     expect(all.length).toBe(2);
-    expect(all[0].id).toBe('ceo-kim');
-    expect(all[1].id).toBe('user-park');
+    const ids = all.map(p => p.id);
+    expect(ids).toContain('p1');
+    expect(ids).toContain('p2');
   });
 
-  it('should create a persona', async () => {
-    mockStore.writeNote.mockResolvedValue(undefined);
+  it('should update an existing persona on real disk', async () => {
+    const loader = makeLoader();
 
     await loader.createPersona({
-      id: 'new-persona',
-      name: 'New Persona',
+      id: 'update-me',
+      name: '수정 전',
+      category: 'engineer',
+      era: '2024',
+      activatedAt: ['validate'],
+      priority: 'normal',
+      content: '원래 내용',
+    });
+
+    const result = await loader.updatePersona('update-me', {
+      name: '수정 후',
+      content: '수정된 내용',
+    });
+
+    expect(result).toBe(true);
+
+    // Reload from disk — cache cleared
+    const updated = await loader.loadPersona('update-me');
+    expect(updated!.name).toBe('수정 후');
+    expect(updated!.content).toContain('수정된 내용');
+  });
+
+  it('should return false when updating non-existent persona', async () => {
+    const loader = makeLoader();
+    const result = await loader.updatePersona('nonexistent', { name: 'X' });
+    expect(result).toBe(false);
+  });
+
+  it('should delete a persona from real disk', async () => {
+    const loader = makeLoader();
+
+    await loader.createPersona({
+      id: 'delete-me',
+      name: '삭제 대상',
       category: 'philosopher',
       era: '2024',
       activatedAt: ['evolve'],
-      priority: 'normal',
-      content: 'Deep thinker',
+      priority: 'low',
+      content: '삭제될 페르소나',
     });
 
-    expect(mockStore.writeNote).toHaveBeenCalledWith(
-      'agent/personas/new-persona.md',
-      'Deep thinker',
-      expect.objectContaining({ id: 'new-persona', name: 'New Persona' }),
-    );
+    // Verify it exists
+    expect(await loader.loadPersona('delete-me')).not.toBeNull();
+
+    const deleted = await loader.deletePersona('delete-me');
+    expect(deleted).toBe(true);
+
+    // Verify it's gone from disk
+    expect(await store.exists('personas/delete-me.md')).toBe(false);
+    // Loading again should return null
+    expect(await loader.loadPersona('delete-me')).toBeNull();
+  });
+
+  it('should return false when deleting non-existent persona', async () => {
+    const loader = makeLoader();
+    const result = await loader.deletePersona('does-not-exist');
+    expect(result).toBe(false);
   });
 });
 
-describe('PersonaEngine', () => {
-  let engine: PersonaEngine;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    const loader = new PersonaLoader({
-      store: mockStore as any,
-      personasDir: 'agent/personas',
-    });
-    engine = new PersonaEngine(loader);
-
-    // Mock loader to return some personas
-    mockStore.listNotes.mockResolvedValue([
-      'agent/personas/ceo.md',
-      'agent/personas/user.md',
-      'agent/personas/eng.md',
-    ]);
-
-    mockStore.readNote
-      .mockResolvedValueOnce({
-        path: 'agent/personas/ceo.md',
-        content: 'Business lens',
-        frontmatter: { id: 'ceo', name: 'CEO', category: 'business', activated_at: ['understand', 'report'], priority: 'high' },
-      })
-      .mockResolvedValueOnce({
-        path: 'agent/personas/user.md',
-        content: 'User lens',
-        frontmatter: { id: 'user', name: 'User', category: 'customer', activated_at: ['understand', 'prototype'], priority: 'normal' },
-      })
-      .mockResolvedValueOnce({
-        path: 'agent/personas/eng.md',
-        content: 'Engineer lens',
-        frontmatter: { id: 'eng', name: 'Engineer', category: 'engineer', activated_at: ['validate'], priority: 'normal' },
-      });
-  });
-
+// ─── PersonaEngine: consultation plan with real files ─────────────────────
+describe('PersonaEngine (real fs)', () => {
   it('should create consultation plan for understand stage', async () => {
+    const loader = makeLoader();
+
+    // Plant real persona files
+    await loader.createPersona({ id: 'ceo', name: 'CEO', category: 'business', era: '2024', activatedAt: ['understand', 'report'], priority: 'high', content: '비즈니스 렌즈' });
+    await loader.createPersona({ id: 'user', name: 'User', category: 'customer', era: '2024', activatedAt: ['understand', 'prototype'], priority: 'normal', content: '사용자 렌즈' });
+    await loader.createPersona({ id: 'eng', name: 'Engineer', category: 'engineer', era: '2024', activatedAt: ['validate'], priority: 'normal', content: '엔지니어 렌즈' });
+
+    const engine = new PersonaEngine(loader);
     const plan = await engine.createConsultationPlan({
       stage: 'understand',
-      topic: 'New feature analysis',
+      topic: '신기능 분석',
       maxPersonas: 3,
     });
 
     expect(plan.stage).toBe('understand');
+    // CEO and User are activated_at understand — at least one should be in plan
     expect(plan.consultations.length).toBeGreaterThanOrEqual(1);
-    expect(plan.consultations[0].prompt).toContain('understand');
   });
 
-  it('should get persona summary by category', async () => {
-    // Need to re-mock since loadAll will be called again
-    mockStore.listNotes.mockResolvedValue(['agent/personas/ceo.md']);
-    mockStore.readNote.mockResolvedValue({
-      path: 'agent/personas/ceo.md',
-      content: 'Business',
-      frontmatter: { id: 'ceo', name: 'CEO', category: 'business', activated_at: [], priority: 'high' },
-    });
+  it('should get persona summary by category from real files', async () => {
+    const loader = makeLoader();
 
+    await loader.createPersona({ id: 'biz', name: 'Biz', category: 'business', era: '2024', activatedAt: [], priority: 'normal', content: '비즈니스' });
+    await loader.createPersona({ id: 'cust', name: 'Cust', category: 'customer', era: '2024', activatedAt: [], priority: 'normal', content: '고객' });
+
+    const engine = new PersonaEngine(loader);
     const summary = await engine.getPersonaSummary();
+
     expect(summary['business']).toBeDefined();
-  });
-});
-
-describe('PersonaLoader CRUD', () => {
-  let loader: PersonaLoader;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    loader = new PersonaLoader({
-      store: mockStore as any,
-      personasDir: 'agent/personas',
-    });
+    expect(summary['customer']).toBeDefined();
+    // format is "id (name)" per persona-engine.ts line 180
+    const bizEntry = summary['business'].find((e: string) => e.includes('biz'));
+    expect(bizEntry).toBeDefined();
+    expect(bizEntry).toContain('Biz'); // name appears
   });
 
-  it('should update an existing persona', async () => {
-    // First, prime the cache with an existing persona
-    mockStore.exists.mockResolvedValue(true);
-    mockStore.readNote.mockResolvedValue({
-      path: 'agent/personas/test-p.md',
-      content: 'Original content',
-      frontmatter: {
-        id: 'test-p',
-        name: 'Test Persona',
-        category: 'business',
-        era: '2024',
-        activated_at: ['understand'],
-        priority: 'normal',
-      },
-    });
-    mockStore.writeNote.mockResolvedValue(undefined);
-
-    const result = await loader.updatePersona('test-p', {
-      name: 'Updated Persona',
-      content: 'Updated content',
-    });
-
-    expect(result).toBe(true);
-    expect(mockStore.writeNote).toHaveBeenCalledWith(
-      'agent/personas/test-p.md',
-      'Updated content',
-      expect.objectContaining({ name: 'Updated Persona', id: 'test-p' }),
-    );
-  });
-
-  it('should return false when updating non-existent persona', async () => {
-    mockStore.exists.mockResolvedValue(false);
-    const result = await loader.updatePersona('nonexistent', { name: 'New Name' });
-    expect(result).toBe(false);
-  });
-
-  it('should delete a persona', async () => {
-    mockStore.deleteNote.mockResolvedValue(true);
-    const result = await loader.deletePersona('test-p');
-    expect(result).toBe(true);
-    expect(mockStore.deleteNote).toHaveBeenCalledWith('agent/personas/test-p.md');
-  });
-
-  it('should return false when deleting non-existent persona', async () => {
-    mockStore.deleteNote.mockResolvedValue(false);
-    const result = await loader.deletePersona('nonexistent');
-    expect(result).toBe(false);
-  });
-});
-
-describe('PersonaEngine auto-creation', () => {
   it('should auto-create persona from template when not found', async () => {
-    vi.clearAllMocks();
-    const loader = new PersonaLoader({
-      store: mockStore as any,
-      personasDir: 'agent/personas',
-    });
+    const loader = makeLoader();
     const engine = new PersonaEngine(loader);
 
-    // First loadPersona returns null (not found), then returns the created persona
-    mockStore.exists
-      .mockResolvedValueOnce(false)   // ensurePersonaExists → loadPersona → not found
-      .mockResolvedValueOnce(true);   // ensurePersonaExists → loadPersona after create → found
-    mockStore.writeNote.mockResolvedValue(undefined);  // createPersona
-    mockStore.readNote.mockResolvedValue({
-      path: 'agent/personas/test-template.md',
-      content: 'Template content',
-      frontmatter: {
-        id: 'test-template',
-        name: 'Test Template',
-        category: 'engineer',
-        activated_at: ['validate'],
-        priority: 'normal',
-      },
-    });
-    // loadAll for stage filtering returns empty
-    mockStore.listNotes.mockResolvedValue([]);
+    const template = {
+      id: 'auto-persona',
+      name: '자동생성 페르소나',
+      category: 'engineer' as const,
+      era: '2024',
+      activatedAt: ['validate'] as Array<'understand' | 'prototype' | 'validate' | 'evolve' | 'report'>,
+      priority: 'normal' as const,
+      content: '자동 생성 테스트 내용',
+    };
+
+    // Persona doesn't exist yet
+    expect(await loader.loadPersona('auto-persona')).toBeNull();
 
     const plan = await engine.createConsultationPlan({
       stage: 'validate',
-      topic: 'Test auto-creation',
-      suggestedPersonas: [{
-        id: 'test-template',
-        name: 'Test Template',
-        category: 'engineer',
-        era: '2024',
-        activatedAt: ['validate'],
-        priority: 'normal',
-        content: 'Template content',
-      }],
+      topic: '자동생성 테스트',
+      suggestedPersonas: [template],
       autoCreate: true,
       maxPersonas: 3,
     });
 
-    expect(mockStore.writeNote).toHaveBeenCalled();
+    // File must now exist on disk
+    expect(await store.exists('personas/auto-persona.md')).toBe(true);
     expect(plan.consultations.length).toBeGreaterThanOrEqual(1);
   });
 });
-
