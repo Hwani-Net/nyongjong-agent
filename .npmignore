@@ -1,0 +1,31 @@
+# Source files (published as dist/)
+src/
+tests/
+scripts/
+*.test.ts
+
+# Development config
+tsconfig.json
+vitest.config.*
+.env
+.env.*
+!.env.example
+
+# IDE & OS
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docs (not needed in package)
+docs/
+*.log
+
+# Data (only personas are published)
+data/03-daily-logs/
+data/memory/
+data/tasks/

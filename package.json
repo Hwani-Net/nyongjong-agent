@@ -1,20 +1,56 @@
 {
   "name": "naedon-agent",
   "version": "0.4.0",
-  "description": "뇽죵이 에이전트 — AI-native autonomous agent server with MCP, Obsidian memory, and multi-model support",
+  "description": "뇽죵이 에이전트 — AI-native autonomous agent server with MCP protocol, Obsidian memory, multi-model support, and dynamic persona system",
   "type": "module",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "bin": {
+    "naedon-agent": "dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist/**/*",
+    "data/personas/**/*.md",
+    "README.md",
+    "LICENSE",
+    ".env.example"
+  ],
   "scripts": {
-    "start": "tsx src/index.ts",
+    "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "dashboard": "tsx src/dashboard-main.ts",
     "test:mcp": "tsx scripts/test-mcp.ts",
     "build": "tsc",
+    "prepublishOnly": "npm run build && npm test",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit"
   },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai-agent",
+    "autonomous-agent",
+    "obsidian",
+    "persona",
+    "ollama",
+    "llm",
+    "grounding",
+    "fact-check"
+  ],
+  "author": "뇽죵이Agent Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nongjong/naedon-agent.git"
+  },
+  "homepage": "https://github.com/nongjong/naedon-agent#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
     "dotenv": "^16.4.7",
@@ -32,3 +68,4 @@
     "node": ">=22.0.0"
   }
 }
+
