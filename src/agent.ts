@@ -78,13 +78,14 @@ export function initializeAgent(config: AppConfig): AgentModules {
   const testRunner = new TestRunner({ shellRunner, projectRoot: PROJECT_ROOT });
   const gitWorktree = new GitWorktree({ repoPath: PROJECT_ROOT, shellRunner });
 
-  // Workflow (inject personaEngine + personaSimulator for Gate 0/1)
+  // Workflow (inject personaEngine + personaSimulator + gitWorktree for Gate 0/1 + branch isolation)
   const cycleRunner = new CycleRunner({
     maxRetries: 3,
     projectRoot: PROJECT_ROOT,
     runShell: (cmd: string, cwd: string) => shellRunner.run(cmd, cwd),
     personaEngine,
     personaSimulator,
+    gitWorktree,
     onGateDecision: (goal: string, verdict: string) => {
       const analysis = analyzeGoal({ goal });
       recordGateDecision({

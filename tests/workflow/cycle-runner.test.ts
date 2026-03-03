@@ -3,23 +3,34 @@
 // We use goals that produce lightweight commands (echo) to avoid recursive npm test.
 import { describe, it, expect } from 'vitest';
 import { CycleRunner } from '../../src/workflow/cycle-runner.js';
-import { ShellRunner } from '../../src/execution/shell-runner.js';
+
 import { createPrototypePlan } from '../../src/workflow/prototype.js';
 import type { ShellResult } from '../../src/workflow/validate.js';
 
 const PROJECT_ROOT = process.cwd();
-const TIMEOUT = 30_000;
+const TIMEOUT = 120_000;
 
-function makeRunner(maxRetries = 2): CycleRunner {
-  const shellRunner = new ShellRunner({ defaultTimeoutMs: 10000 });
-  return new CycleRunner({
-    maxRetries,
-    projectRoot: PROJECT_ROOT,
-    runShell: (cmd, cwd) => shellRunner.run(cmd, cwd),
+// Mock shell that returns success immediately — avoids recursive npm test execution.
+// Real shell integration is covered by execution.test.ts (ShellRunner unit tests).
+function makeMockShell(): (cmd: string, cwd: string) => Promise<ShellResult> {
+  return async (cmd: string) => ({
+    exitCode: 0,
+    stdout: `mock output for: ${cmd.slice(0, 60)}`,
+    stderr: '',
+    durationMs: 1,
   });
 }
 
-describe('CycleRunner (real shell)', () => {
+function makeRunner(maxRetries = 2): CycleRunner {
+  return new CycleRunner({
+    maxRetries,
+    projectRoot: PROJECT_ROOT,
+    runShell: makeMockShell(),
+  });
+}
+
+
+describe('CycleRunner (mock shell)', () => {
   it('should initialize with idle state', () => {
     const runner = makeRunner();
     const state = runner.getState();

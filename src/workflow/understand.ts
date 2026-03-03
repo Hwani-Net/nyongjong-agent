@@ -11,6 +11,10 @@ export interface UnderstandInput {
   projectContext?: string;
   /** Optional: relevant KI summaries */
   knowledgeItems?: string[];
+  /** Optional: skip Gate 0 (business) and Gate 1 (PRD) — useful for bug fixes, refactoring */
+  skipGates?: boolean;
+  /** Optional: force Gate 0 + Gate 1 regardless of complexity — use for /자율 (new project MVP) */
+  forceGates?: boolean;
 }
 
 export interface UnderstandOutput {

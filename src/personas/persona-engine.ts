@@ -165,6 +165,10 @@ export class PersonaEngine {
       '',
       `## Topic`,
       topic,
+      '',
+      '## CRITICAL LANGUAGE RULE',
+      '반드시 한국어로만 답변하세요. 영어, 중국어, 일본어 등 다른 언어로 전환하지 마세요.',
+      '모든 답변은 처음부터 끝까지 100% 한국어여야 합니다.',
     ].join('\n');
   }
 

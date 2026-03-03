@@ -370,40 +370,30 @@ body {
 }
 .chat-bubble.typing { background: var(--surface-alt); border: 1px dashed var(--border); }
 
-/* Office View */
+/* Office View — Claw Empire iframe embed */
 .office-container {
   position: relative; height: calc(100vh - 140px);
-  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
   border-radius: var(--radius); overflow: hidden;
-  image-rendering: pixelated;
+  background: #0f0e17;
 }
-.office-grid {
-  display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;
-  padding: 2rem; height: 100%;
+.office-container iframe {
+  width: 100%; height: 100%; border: none;
 }
-.office-desk {
-  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 8px; padding: 1rem; text-align: center;
+.office-fallback {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 0.5rem; transition: all 0.3s; position: relative;
+  height: 100%; color: rgba(255,255,255,0.6); gap: 1rem; text-align: center;
+  padding: 2rem;
 }
-.office-desk:hover { background: rgba(255,255,255,0.1); transform: scale(1.02); }
-.office-desk.active { border-color: var(--accent); box-shadow: 0 0 20px rgba(99,102,241,0.3); }
-.desk-agent { font-size: 2rem; animation: agentBounce 2s ease-in-out infinite; }
-.desk-label { font-size: 0.6875rem; color: rgba(255,255,255,0.7); font-weight: 500; }
-.desk-status {
-  font-size: 0.5625rem; padding: 2px 6px; border-radius: 4px;
-  background: rgba(16,185,129,0.2); color: #10B981;
+.office-fallback .icon { font-size: 3rem; }
+.office-fallback .msg { font-size: 0.9375rem; font-weight: 600; }
+.office-fallback .hint { font-size: 0.75rem; opacity: 0.5; font-family: monospace; }
+.office-fallback .retry-btn {
+  margin-top: 0.5rem; padding: 0.5rem 1.25rem; border-radius: var(--radius-sm);
+  border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.7); cursor: pointer; font-size: 0.8125rem;
+  transition: all 0.2s;
 }
-.desk-status.busy { background: rgba(245,158,11,0.2); color: #F59E0B; }
-@keyframes agentBounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
-}
-.office-floor {
-  position: absolute; bottom: 0; left: 0; right: 0; height: 60px;
-  background: repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 32px, rgba(255,255,255,0.01) 32px, rgba(255,255,255,0.01) 64px);
-}
+.office-fallback .retry-btn:hover { background: rgba(255,255,255,0.1); }
 /* Stage-Gate styles */
 .sg-stage {
   flex: 1; padding: 0.5rem 0.25rem; text-align: center;
@@ -591,11 +581,14 @@ body {
         </div>
       </div>
 
-      <!-- Office page -->
+      <!-- Office page — Claw Empire iframe -->
       <div class="page" id="page-office">
-        <div class="office-container fade-in">
-          <div class="office-grid" id="officeGrid"></div>
-          <div class="office-floor"></div>
+        <div class="office-container fade-in" id="officeContainer">
+          <div class="office-fallback" id="officeFallback">
+            <div class="icon">🏢</div>
+            <div class="msg">Claw Empire 오피스에 연결 중...</div>
+            <div class="hint">http://127.0.0.1:8800</div>
+          </div>
         </div>
       </div>
 
@@ -831,39 +824,47 @@ function addChatBubble(text, role, sender) {
   area.scrollTop = area.scrollHeight;
 }
 
-// Office view — syncs with SSE persona data
-let officeDesks = [
-  { emoji: '🐾', name: '뇽죵이', role: 'CEO Agent', status: 'active' },
-  { emoji: '💼', name: 'CEO Naedon', role: 'Business', status: 'idle' },
-  { emoji: '🤔', name: 'Philosopher', role: 'Advisor', status: 'idle' },
-  { emoji: '⚙️', name: 'Engineer', role: 'Technical', status: 'idle' },
-  { emoji: '🔒', name: 'Auditor', role: 'Security', status: 'idle' },
-  { emoji: '👤', name: 'User Advocate', role: 'Customer', status: 'idle' },
-];
+// Office view — Claw Empire iframe embed (read-only monitor)
+const CLAW_OFFICE_URL = 'http://127.0.0.1:8800';
+let clawConnected = false;
+
 function updateOfficeFromSSE(data) {
-  const stage = data.activeTask?.stage || '';
-  const stagePersonaMap = {
-    understand: ['CEO Naedon', 'User Advocate', 'Philosopher'],
-    prototype: ['Engineer'],
-    validate: ['Engineer', 'Auditor', 'User Advocate'],
-    evolve: ['Engineer', 'Auditor', 'Philosopher'],
-    report: ['CEO Naedon'],
-  };
-  const activeNames = stagePersonaMap[stage] || [];
-  officeDesks.forEach(d => {
-    d.status = d.name === '뇽죵이' ? 'active' : (activeNames.includes(d.name) ? 'active' : 'idle');
-  });
+  // No-op: Claw office runs independently
 }
+
 function renderOffice() {
-  const grid = document.getElementById('officeGrid');
-  grid.innerHTML = officeDesks.map(d => {
-    const isActive = d.status === 'active';
-    return '<div class="office-desk' + (isActive ? ' active' : '') + '">' +
-      '<div class="desk-agent">' + d.emoji + '</div>' +
-      '<div class="desk-label">' + d.name + '</div>' +
-      '<div class="desk-status' + (isActive ? ' busy' : '') + '">' + (isActive ? '🟢 Active' : '⚪ Idle') + '</div>' +
-    '</div>';
-  }).join('');
+  const container = document.getElementById('officeContainer');
+  const fallback = document.getElementById('officeFallback');
+  // Check if Claw server is reachable
+  fetch(CLAW_OFFICE_URL + '/api/health', { mode: 'no-cors', signal: AbortSignal.timeout(3000) })
+    .then(() => {
+      if (!clawConnected) {
+        clawConnected = true;
+        // Remove fallback and inject iframe
+        if (fallback) fallback.remove();
+        const existing = container.querySelector('iframe');
+        if (!existing) {
+          const iframe = document.createElement('iframe');
+          iframe.src = CLAW_OFFICE_URL;
+          iframe.setAttribute('allow', 'autoplay');
+          iframe.setAttribute('loading', 'lazy');
+          container.appendChild(iframe);
+        }
+      }
+    })
+    .catch(() => {
+      clawConnected = false;
+      const existing = container.querySelector('iframe');
+      if (existing) existing.remove();
+      if (!container.querySelector('.office-fallback')) {
+        container.innerHTML = '<div class="office-fallback" id="officeFallback">' +
+          '<div class="icon">🏢</div>' +
+          '<div class="msg">Claw Empire 오피스가 꺼져 있습니다</div>' +
+          '<div class="hint">cd e:\\Agent\\claw-empire\\claw-empire && pnpm dev:local</div>' +
+          '<button class="retry-btn" onclick="renderOffice()">🔄 다시 연결</button>' +
+        '</div>';
+      }
+    });
 }
 
 // Terminal panel
@@ -1671,6 +1672,15 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
 
 
   server.listen(port, () => {
-    log.info(`🐾 Dashboard running at http://localhost:${port}`);
+    const url = `http://localhost:${port}`;
+    log.info(`🐾 Dashboard running at ${url}`);
+    // Auto-open browser on first launch
+    const { exec } = require('child_process');
+    const cmd = process.platform === 'win32' ? `start "" "${url}"`
+              : process.platform === 'darwin' ? `open "${url}"`
+              : `xdg-open "${url}"`;
+    exec(cmd, (err: any) => {
+      if (err) log.warn('Could not auto-open browser:', err.message);
+    });
   });
 }

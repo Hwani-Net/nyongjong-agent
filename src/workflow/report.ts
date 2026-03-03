@@ -26,6 +26,12 @@ export interface ReportInput {
   totalDurationMs: number;
   /** Number of cycle iterations */
   cycleIterations: number;
+  /** Gate 0 verdict (if ran) */
+  businessGateVerdict?: string;
+  /** Gate 1 PRD version + satisfied (if ran) */
+  prdResult?: { version: number; rounds: number; allSatisfied: boolean };
+  /** Whether gates were force-enabled */
+  forceGates?: boolean;
 }
 
 export interface Report {
@@ -74,6 +80,27 @@ export function generateReport(input: ReportInput): Report {
   sections.push('');
   sections.push(`> 소요 시간: ${durationStr} | 반복 횟수: ${cycleIterations} | 유형: ${analysis.taskType} (${analysis.complexity})`);
   sections.push('');
+
+  // Gate 0 / Gate 1 결과 (forceGates 또는 REQUIRED 시에만)
+  if (input.businessGateVerdict || input.prdResult) {
+    sections.push('## 🚦 Gate 실행 결과');
+    if (input.forceGates) {
+      sections.push('> ⚡ forceGates=true — complexity 무관 강제 실행 (/자율 모드)');
+    }
+    if (input.businessGateVerdict) {
+      const gIcon = input.businessGateVerdict === 'PASS' ? '✅' : input.businessGateVerdict === 'PIVOT' ? '🔄' : '❌';
+      sections.push(`- Gate 0 (사업성): ${gIcon} ${input.businessGateVerdict}`);
+    } else {
+      sections.push('- Gate 0 (사업성): ⏭️ SKIP');
+    }
+    if (input.prdResult) {
+      const pIcon = input.prdResult.allSatisfied ? '✅' : '⚠️';
+      sections.push(`- Gate 1 (PRD): ${pIcon} v${input.prdResult.version} (${input.prdResult.rounds}라운드, ${input.prdResult.allSatisfied ? '전원 만족' : '일부 불만 잔존'})`);
+    } else {
+      sections.push('- Gate 1 (PRD): ⏭️ SKIP');
+    }
+    sections.push('');
+  }
 
   // Validation results
   sections.push('## 검증 결과');

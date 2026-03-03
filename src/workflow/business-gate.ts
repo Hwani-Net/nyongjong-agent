@@ -142,7 +142,7 @@ export function shouldRunBusinessGate(
 
 // ─── Business persona IDs that participate in Gate 0 ───
 
-const BUSINESS_PERSONA_IDS = ['ceo-naedon', 'growth-hacker'];
+const BUSINESS_PERSONA_IDS = ['ceo-nyongjong', 'growth-hacker'];
 
 /**
  * Gate 0: Business viability check.
@@ -217,7 +217,17 @@ function buildBusinessTopic(
     '3. 경쟁 우위 또는 차별점이 있는가?',
     '4. 지금 만들 타이밍인가?',
     '',
-    '반드시 PASS, PIVOT, FAIL 중 하나로 판정하고 이유를 설명하세요.',
+    '### ⚠️ 판정 기준 (중요)',
+    '- 이것은 초기 아이디어 단계입니다. 세부 기획이 부족한 것은 정상입니다.',
+    '- PASS: 시장 가치가 있고 기본적으로 실현 가능하면 통과',
+    '- PIVOT: 방향 수정이 필요할 때만 (예: 타겟 변경, 범위 축소)',
+    '- FAIL: 근본적 결함이 있을 때만 (예: 불법, 기술적 불가능, 시장 0)',
+    '- 컨텍스트 부족, 세부 기획 미비는 FAIL 사유가 아닙니다!',
+    '',
+    '### 응답 형식',
+    '반드시 응답 마지막에 다음 형식으로 판정을 명시하세요:',
+    '[VERDICT:PASS] 또는 [VERDICT:PIVOT] 또는 [VERDICT:FAIL]',
+    '반드시 한국어로만 답변하세요.',
   ];
 
   if (groundingData) {
@@ -309,9 +319,27 @@ async function tryLLMReview(
  * Parse LLM response text to extract a business verdict.
  */
 function parseLLMVerdict(response: string): BusinessVerdict {
-  const upper = response.toUpperCase();
-  if (upper.includes('FAIL') || upper.includes('불합격') || upper.includes('중단')) return 'FAIL';
-  if (upper.includes('PIVOT') || upper.includes('방향 수정') || upper.includes('조정')) return 'PIVOT';
+  // Priority 1: Structured verdict marker (most reliable)
+  const markerMatch = response.match(/\[VERDICT:(PASS|PIVOT|FAIL)\]/i);
+  if (markerMatch) {
+    return markerMatch[1].toUpperCase() as BusinessVerdict;
+  }
+
+  // Priority 2: Korean verdict keywords at sentence start or as standalone
+  // Only match when these words appear as a clear judgment, not in discussion context
+  const lines = response.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Look for lines that start with verdict-like patterns
+    if (/^\*{0,2}판정\*{0,2}\s*[:：]\s*(PASS|PIVOT|FAIL|통과|합격|불합격|중단)/i.test(trimmed)) {
+      if (/FAIL|불합격|중단/i.test(trimmed)) return 'FAIL';
+      if (/PIVOT|방향\s*수정|조정/i.test(trimmed)) return 'PIVOT';
+      return 'PASS';
+    }
+  }
+
+  // Priority 3: Fallback — default to PASS for ambiguous responses
+  // Rationale: at idea stage, benefit of doubt is better than false rejection
   return 'PASS';
 }
 
@@ -326,7 +354,7 @@ function analyzeBusinessViability(
   analysis: UnderstandOutput,
 ): BusinessReview {
   // CEO persona: cost/ROI focus
-  if (personaId === 'ceo-naedon') {
+  if (personaId === 'ceo-nyongjong') {
     return analyzeCeoView(personaId, personaName, goal, analysis);
   }
 
