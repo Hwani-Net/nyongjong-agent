@@ -466,6 +466,9 @@ body {
       <div class="nav-item" data-page="cache-stats" onclick="showPage('cache-stats')">
         <span class="icon">📦</span> Cache Stats
       </div>
+      <div class="nav-item" data-page="stitch" onclick="showPage('stitch')">
+        <span class="icon">🎨</span> Stitch Design
+      </div>
     </nav>
     <div class="sidebar-footer">
       <span id="sidebarVersion" style="font-size:0.75rem; color:var(--text-secondary)">v—</span>
@@ -764,6 +767,65 @@ body {
         </div>
       </div>
 
+      <!-- Stitch Design page -->
+      <div class="page" id="page-stitch">
+        <div class="fade-in">
+          <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
+            <div class="kpi-card">
+              <div class="kpi-label">Stitch Tools</div>
+              <div class="kpi-value" style="color:var(--pink)">3</div>
+              <div class="kpi-sub">ideate · design-system · forum</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Design Tokens</div>
+              <div class="kpi-value" style="color:var(--accent)">Auto</div>
+              <div class="kpi-sub">HTML → DESIGN.md</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Forum Monitor</div>
+              <div class="kpi-value" style="color:var(--green)">RSS</div>
+              <div class="kpi-sub">discuss.ai.google.dev</div>
+            </div>
+          </div>
+          <div class="kpi-card section">
+            <div class="section-title">🎨 Stitch Ideate — 디자인 비교 생성기</div>
+            <div style="font-size:0.8125rem;color:var(--text-secondary);line-height:1.7">
+              <p>기본 아이디어 하나로 <strong>1~5개 디자인 변형</strong>을 자동 생성합니다.</p>
+              <p style="margin-top:0.5rem">스타일 방향: <span class="badge badge-purple">Minimalist</span> <span class="badge badge-blue">Bold</span> <span class="badge" style="background:#1E1B4B;color:#A78BFA">Dark Premium</span> <span class="badge badge-orange">Warm</span> <span class="badge" style="background:var(--surface-alt);color:var(--text-secondary)">Editorial</span></p>
+              <p style="margin-top:0.5rem">MCP 도구: <code>stitch_ideate</code></p>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem">
+            <div class="kpi-card">
+              <div class="section-title">🔍 Design System Extractor</div>
+              <div style="font-size:0.8125rem;color:var(--text-secondary);line-height:1.7">
+                <p>Stitch HTML에서 디자인 토큰을 자동 추출합니다:</p>
+                <ul style="margin:0.5rem 0 0 1rem">
+                  <li>색상 (hex/rgb/hsl → 정규화)</li>
+                  <li>폰트 패밀리 & 웨이트</li>
+                  <li>간격, Border Radius, Shadow</li>
+                  <li>CSS 커스텀 프로퍼티</li>
+                </ul>
+                <p style="margin-top:0.5rem">MCP 도구: <code>stitch_design_system_extract</code></p>
+              </div>
+            </div>
+            <div class="kpi-card">
+              <div class="section-title">📡 Forum Monitor</div>
+              <div style="font-size:0.8125rem;color:var(--text-secondary);line-height:1.7">
+                <p>Stitch 커뮤니티 포럼을 RSS로 모니터링합니다:</p>
+                <ul style="margin:0.5rem 0 0 1rem">
+                  <li>discuss.ai.google.dev/c/stitch/61</li>
+                  <li>MCP, API, Design System 등 키워드 분류</li>
+                  <li>날짜 필터링 (lastCheckDate)</li>
+                  <li>스킬 업데이트 권고 자동 생성</li>
+                </ul>
+                <p style="margin-top:0.5rem">MCP 도구: <code>stitch_forum_check</code></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
   </div>
 </div>
 
@@ -782,7 +844,7 @@ function showPage(page) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
   document.querySelector('[data-page="' + page + '"]').classList.add('active');
-  const titles = { dashboard:'📊 Dashboard', kanban:'📋 Kanban', tools:'🔧 Tools', personas:'🎭 Personas', chat:'💬 Chat', office:'🎮 Office', terminal:'🖥️ Terminal', inbox:'📨 Decision Inbox', settings:'⚙️ Settings', logs:'📝 Event Log', 'stage-gate':'🔀 Stage-Gate Monitor', 'cache-stats':'📦 Cache Stats' };
+  const titles = { dashboard:'📊 Dashboard', kanban:'📋 Kanban', tools:'🔧 Tools', personas:'🎭 Personas', chat:'💬 Chat', office:'🎮 Office', terminal:'🖥️ Terminal', inbox:'📨 Decision Inbox', settings:'⚙️ Settings', logs:'📝 Event Log', 'stage-gate':'🔀 Stage-Gate Monitor', 'cache-stats':'📦 Cache Stats', stitch:'🎨 Stitch Design' };
   document.getElementById('pageTitle').textContent = titles[page] || page;
   if (page === 'office') renderOffice();
   if (page === 'stage-gate') refreshStageGate();

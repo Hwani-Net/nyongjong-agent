@@ -1,8 +1,8 @@
-# 🐾 뇽죵이 Agent v0.5.1
+# 🐾 뇽죵이 Agent v0.6.0
 
-> AI-native 자율 에이전트 서버 — MCP 프로토콜, Obsidian 메모리, 멀티 모델, 페르소나 시스템
+> AI-native 자율 에이전트 서버 — MCP 프로토콜, Obsidian 메모리, 멀티 모델, 페르소나 시스템, Stitch 디자인 오케스트레이션
 
-![Tests](https://img.shields.io/badge/tests-246%2F246-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-core_95%25+-blue) ![v0.5.1](https://img.shields.io/badge/version-0.5.1-green)
+![Tests](https://img.shields.io/badge/tests-287%2F287-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-core_95%25+-blue) ![v0.6.0](https://img.shields.io/badge/version-0.6.0-green)
 
 ## Quick Start
 
@@ -13,7 +13,7 @@ cp .env.example .env    # 경로 설정
 npm start               # MCP 서버 (Antigravity 자동 연결)
 npm run dashboard       # 대시보드 → http://localhost:3100
 npm run test:mcp        # MCP 연결 검증
-npm test                # 유닛 테스트 (246/246, 19 files)
+npm test                # 유닛 테스트 (287/287, 22 files)
 npm run test:coverage   # 커버리지 리포트
 ```
 
@@ -21,7 +21,7 @@ npm run test:coverage   # 커버리지 리포트
 
 ```
 ┌─────────────┐    MCP stdio    ┌──────────────────┐
-│ Antigravity  │◄──────────────►│  MCP Server (28)  │
+│ Antigravity  │◄──────────────►│  MCP Server (31)  │
 │ (VS Code)    │                │                    │
 └─────────────┘                └────────┬───────────┘
                                         │
@@ -58,7 +58,7 @@ npm run test:coverage   # 커버리지 리포트
 |---|------|-------------|
 | 1 | 📊 **Dashboard** | 6 KPI 카드 + Task Queue 실시간 |
 | 2 | 📋 **Kanban** | 6단계 AI 순환 워크플로우 보드 |
-| 3 | 🔧 **Tool Registry** | 8그룹 28도구 상태 모니터링 |
+| 3 | 🔧 **Tool Registry** | 9그룹 31도구 상태 모니터링 |
 | 4 | 🎭 **Personas** | 6개 페르소나 카테고리별 그리드 |
 | 5 | 💬 **Chat** | 대표님 ↔ 에이전트 대화 인터페이스 |
 | 6 | 🎮 **Office** | 에이전트 오피스 뷰 (역할별 데스크) |
@@ -87,7 +87,7 @@ npm run test:coverage   # 커버리지 리포트
 - 🎨 글래시 디자인 + CSS 애니메이션
 - 📱 반응형 쉘 레이아웃 (260px 사이드바)
 
-## MCP Tools (28)
+## MCP Tools (31)
 
 ### Core
 | Tool | Description |
@@ -160,6 +160,13 @@ npm run test:coverage   # 커버리지 리포트
 |------|-------------|
 | `shell_run` | 셸 명령 직접 실행 (command, cwd, timeoutMs) |
 
+### Stitch
+| Tool | Description |
+|------|-------------|
+| `stitch_ideate` | 멀티프롬프트 디자인 비교 계획 생성 (1-5개 변형) |
+| `stitch_design_system_extract` | Stitch HTML → 디자인 토큰 추출 + DESIGN.md 생성 |
+| `stitch_forum_check` | Stitch 포럼 RSS 모니터링 + 스킬 키워드 분류 |
+
 ## Personas
 
 ### 기본 페르소나 (6명)
@@ -207,7 +214,7 @@ Gate 0 (사업성) → Gate 1 (PRD) → Prototype → Validate ↔ Evolve → Re
 ```
 src/
 ├── index.ts              # MCP entry point
-├── mcp-server.ts         # 28 MCP tools
+├── mcp-server.ts         # 31 MCP tools
 ├── agent.ts              # Module orchestrator
 ├── dashboard-main.ts     # Dashboard entry point
 ├── core/
@@ -247,13 +254,17 @@ src/
 │   ├── test-runner.ts    # vitest + tsc
 │   ├── self-heal.ts      # Auto-retry with backoff
 │   └── cicd-gate.ts      # Pre-commit quality gate
+├── stitch/
+│   ├── stitch-ideate.ts         # Design comparison plan generator
+│   ├── stitch-design-system.ts  # HTML → design token extractor
+│   └── stitch-forum.ts          # Discourse RSS monitor
 ├── dashboard/
 │   └── server.ts         # HTTP + SSE dashboard (10-page UI)
 └── utils/
     └── logger.ts         # Structured logging
 
 data/personas/            # Default persona definitions (6)
-tests/                    # 246 unit tests (19 files)
+tests/                    # 287 unit tests (22 files)
 scripts/test-mcp.ts       # MCP connection verifier
 ```
 
