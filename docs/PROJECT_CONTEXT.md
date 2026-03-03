@@ -55,11 +55,11 @@ src/
 - [x] npm build 성공 (205KB 패키지)
 - [x] Dashboard에 Stitch Design 페이지 추가 (13번째 페이지)
 - [x] 미커밋 파일 정리 및 Git 커밋 (6개 커밋)
-- [ ] Git push (원경 저장소 미설정)
+- [x] Git push (원경 저장소 설정 완료: **Hwani-Net/nyongjong-agent**)
+- [x] npm publish 완료 (**nyongjong-agent@0.6.0** → https://www.npmjs.com/package/nyongjong-agent)
 
 ### TODO (미래)
-- [ ] Git 원경 저장소 설정 + push
-- [ ] npm publish (npmjs.com 배포)
+- [ ] npm Token 갱신 필요일: **2026-06-02** (Granular Token 90일 만료)
 - [ ] Dashboard Stitch 페이지에 라이브 데이터 연동 (실시간 포럼 모니터링)
 
 ## 🔧 ADR (Architecture Decision Records)
