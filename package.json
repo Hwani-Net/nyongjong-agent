@@ -48,9 +48,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nongjong/nyongjong-agent.git"
+    "url": "https://github.com/Hwani-Net/nyongjong-agent.git"
   },
-  "homepage": "https://github.com/nongjong/nyongjong-agent#readme",
+  "homepage": "https://github.com/Hwani-Net/nyongjong-agent#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
     "@tavily/core": "^0.7.2",
