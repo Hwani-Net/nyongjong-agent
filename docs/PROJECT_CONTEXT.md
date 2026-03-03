@@ -14,6 +14,8 @@
 | **테스트** | vitest — **287/287 pass** (22 파일) |
 | **MCP 도구** | **31개** (core 3 + toggle 28) |
 | **프로토콜** | Model Context Protocol (stdio) |
+| **GitHub** | https://github.com/Hwani-Net/nyongjong-agent |
+| **npm** | https://www.npmjs.com/package/nyongjong-agent |
 
 ## 🏗️ 아키텍처 개요
 
@@ -24,7 +26,7 @@ src/
 ├── workflow/      # Understand, BusinessGate, PRDElicitation, FeedbackRouter, CycleRunner
 ├── grounding/     # GroundingEngine, Adapters (KOSIS, Law, Naver, Trends, AppReviews, Web)
 ├── execution/     # ShellRunner, SelfHeal, CompletionLoop, CICDGate
-├── stitch/        # StitchIdeate, DesignSystemExtract, ForumCheck ← NEW (v0.6.0)
+├── stitch/        # StitchIdeate, DesignSystemExtract, ForumCheck (v0.6.0)
 ├── advisory/      # CriticCheck (AgentPRM 패턴)
 ├── dashboard/     # Real-time SSE dashboard
 ├── utils/         # Logger (ring buffer)
@@ -35,7 +37,7 @@ src/
 
 ## 📊 현재 진행 상태
 
-### Phase: 구현 완료 → 검증 대기
+### Phase: v0.6.0 릴리스 완료 ✅
 
 - [x] Phase 0.1: 초기 설정 (MCP + vitest)
 - [x] Phase 0.2: Obsidian + Task Manager
@@ -43,24 +45,21 @@ src/
 - [x] Phase 0.4: Ralph Mode + Grounding + Tool Toggle
 - [x] Phase 0.5: Stage-Gate + Dashboard Health + Git Worktree
 - [x] Phase 0.6: **Stitch 도구 3종** (Ideate, DesignSystem, Forum)
-  - [x] `stitch-ideate.ts` — 디자인 변형 비교 계획 생성
-  - [x] `stitch-design-system.ts` — HTML에서 디자인 토큰 추출 → DESIGN.md
-  - [x] `stitch-forum.ts` — Discourse RSS 모니터링 + 키워드 분류
-  - [x] `mcp-server.ts`에 import + registry + server.tool 등록
-  - [x] tsc --noEmit 통과
-  - [x] npm test 246/246 pass
-- [x] Phase 0.6 마무리: CHANGELOG 업데이트, 버전 범프 (0.5.1 → 0.6.0)
-- [x] Stitch 유닛 테스트 41개 추가 (ideate 12 + design-system 17 + forum 12)
+- [x] 유닛 테스트 41개 추가 (287/287 pass)
 - [x] README.md v0.6.0 업데이트 (31 tools, 287 tests, Stitch 섹션)
 - [x] npm build 성공 (205KB 패키지)
 - [x] Dashboard에 Stitch Design 페이지 추가 (13번째 페이지)
-- [x] 미커밋 파일 정리 및 Git 커밋 (6개 커밋)
-- [x] Git push (원경 저장소 설정 완료: **Hwani-Net/nyongjong-agent**)
-- [x] npm publish 완료 (**nyongjong-agent@0.6.0** → https://www.npmjs.com/package/nyongjong-agent)
+- [x] Git push (GitHub: **Hwani-Net/nyongjong-agent**)
+- [x] npm publish 완료 (**nyongjong-agent@0.6.0**)
+- [x] ObsidianStore REST API 전환 완료
+- [x] `docs/` 레거시 5파일 아카이브 → `docs/archive/`
+- [x] LESSONS_LEARNED.md execute_shell 구식 항목 DEPRECATED 처리
+- [x] Obsidian 뇽죵이Agent 노트 동기화
 
 ### TODO (미래)
 - [ ] npm Token 갱신 필요일: **2026-06-02** (Granular Token 90일 만료)
 - [ ] Dashboard Stitch 페이지에 라이브 데이터 연동 (실시간 포럼 모니터링)
+- [ ] GEMINI.md 다이어트 (572줄 → 축소)
 
 ## 🔧 ADR (Architecture Decision Records)
 
@@ -77,6 +76,11 @@ src/
 ### ADR-003: Forum RSS는 Discourse 표준 RSS 파싱
 - **결정**: XML 파서 라이브러리 대신 정규식으로 RSS 파싱
 - **이유**: 동일한 경량화 원칙, Discourse RSS는 구조가 단순
+
+### ADR-004: Obsidian REST API 전환 (2026-03-04)
+- **결정**: ObsidianStore를 파일시스템 직접 쓰기 → Obsidian Local REST API로 전환
+- **이유**: 경로 하드코딩 의존 제거, 볼트 불일치 위험 해소
+- **관련**: `src/core/obsidian-store.ts` 전면 재작성
 
 ## 🚨 알려진 이슈
 - `persona_generate` 도구가 README에 언급되나 registry에서 확인 필요
