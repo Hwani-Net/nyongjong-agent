@@ -1,24 +1,70 @@
 // Tests for TaskManager — Obsidian-based task queue management
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm } from 'fs/promises';
-import { join } from 'path';
-import { tmpdir } from 'os';
+// ObsidianStore is fully mocked so tests don't need a real vault or REST API.
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ObsidianStore } from '../../src/core/obsidian-store.js';
 import { TaskManager } from '../../src/core/task-manager.js';
 
+// ── In-memory fake store ──────────────────────────────────────────────────
+function makeFakeStore(): ObsidianStore {
+  const db = new Map<string, string>(); // path → raw markdown content
+
+  const store = {
+    async readNote(path: string) {
+      const raw = db.get(path);
+      if (!raw) throw new Error(`ENOENT: ${path}`);
+      // Parse minimal frontmatter/content
+      const fm: Record<string, unknown> = {};
+      let content = raw;
+      if (raw.startsWith('---')) {
+        const end = raw.indexOf('\n---', 3);
+        if (end !== -1) {
+          const yaml = raw.slice(4, end);
+          yaml.split('\n').forEach((line) => {
+            const [k, ...v] = line.split(': ');
+            if (k && v.length) {
+              const val = v.join(': ').trim();
+              try { fm[k.trim()] = JSON.parse(val); } catch { fm[k.trim()] = val; }
+            }
+          });
+          content = raw.slice(end + 4).trim();
+        }
+      }
+      return { path, frontmatter: fm, content };
+    },
+    async writeNote(path: string, content: string, frontmatter?: Record<string, unknown>) {
+      let raw = content;
+      if (frontmatter && Object.keys(frontmatter).length > 0) {
+        const fmLines = Object.entries(frontmatter)
+          .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+          .join('\n');
+        raw = `---\n${fmLines}\n---\n${content}`;
+      }
+      db.set(path, raw);
+    },
+    async listNotes(dir: string) {
+      return [...db.keys()].filter((p) => p.startsWith(dir) && p.endsWith('.md'));
+    },
+    async searchNotes() { return []; },
+    async exists(path: string) { return db.has(path); },
+    async deleteNote(path: string) {
+      if (!db.has(path)) return false;
+      db.delete(path);
+      return true;
+    },
+    getCacheStats() { return { hits: 0, misses: 0, invalidations: 0, size: 0 }; },
+    clearNoteCache() {},
+  } as unknown as ObsidianStore;
+
+  return store;
+}
+
 describe('TaskManager', () => {
-  let tempDir: string;
   let store: ObsidianStore;
   let taskManager: TaskManager;
 
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'task-test-'));
-    store = new ObsidianStore({ vaultPath: tempDir });
+  beforeEach(() => {
+    store = makeFakeStore();
     taskManager = new TaskManager({ store, agentDataDir: 'agent' });
-  });
-
-  afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true });
   });
 
   it('should return empty queue when no tasks exist', async () => {

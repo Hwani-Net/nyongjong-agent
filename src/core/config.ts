@@ -4,8 +4,9 @@ import { config as loadDotenv } from 'dotenv';
 import { resolve } from 'path';
 
 const ConfigSchema = z.object({
-  // Obsidian vault absolute path
-  OBSIDIAN_VAULT_PATH: z.string().min(1, 'OBSIDIAN_VAULT_PATH is required'),
+  // Obsidian Local REST API
+  OBSIDIAN_API_URL: z.string().url().default('http://127.0.0.1:27123'),
+  OBSIDIAN_API_KEY: z.string().min(1, 'OBSIDIAN_API_KEY is required'),
 
   // Agent data directory inside the vault (relative path)
   AGENT_DATA_DIR: z.string().default('뇽죵이Agent'),
@@ -46,12 +47,7 @@ export function loadConfig(): AppConfig {
   return cachedConfig;
 }
 
-/**
- * Get the full path to the agent data directory inside the Obsidian vault.
- */
-export function getAgentDataPath(config: AppConfig): string {
-  return resolve(config.OBSIDIAN_VAULT_PATH, config.AGENT_DATA_DIR);
-}
+
 
 /**
  * Reset cached config (useful for testing).

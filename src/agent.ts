@@ -58,7 +58,7 @@ export function initializeAgent(config: AppConfig): AgentModules {
   log.info('━━━ Initializing 뇽죵이 Agent ━━━');
 
   // Core
-  const store = new ObsidianStore({ vaultPath: config.OBSIDIAN_VAULT_PATH });
+  const store = new ObsidianStore({ apiKey: config.OBSIDIAN_API_KEY, apiUrl: config.OBSIDIAN_API_URL });
   const taskManager = new TaskManager({ store, agentDataDir: config.AGENT_DATA_DIR });
 
   // Personas
@@ -189,7 +189,7 @@ export async function getAgentStatus(modules: AgentModules, config: AppConfig): 
     enabledTools: registryState.filter(t => t.enabled).map(t => t.name),
     status: 'running',
     modules: {
-      obsidian: { connected: true, vault: config.OBSIDIAN_VAULT_PATH },
+      obsidian: { connected: true, apiUrl: config.OBSIDIAN_API_URL },
       ollama: ollamaHealth,
       grounding: { adapters: adapterStatus },
       workflow: { status: modules.cycleRunner.getState().status },
@@ -200,7 +200,7 @@ export async function getAgentStatus(modules: AgentModules, config: AppConfig): 
     toolGroups: registrySummary,
     ollamaStatus: ollamaHealth.available ? 'Connected' : 'Offline',
     ollamaModels: ollamaHealth.models || [],
-    vaultPath: config.OBSIDIAN_VAULT_PATH || 'Not configured',
+    obsidianApi: config.OBSIDIAN_API_URL ?? 'Not configured',
 
     // ── Phase 5: Dashboard 추가 필드 ──
     ollama: { available: ollamaHealth.available, models: ollamaHealth.models || [] },

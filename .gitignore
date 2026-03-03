@@ -11,3 +11,7 @@ stitch.html
 html_rendered.png
 stitch_screenshot.png
 vitest-result.json
+
+# Data directory temp/test files
+data/**/vault-unification-test*.md
+data/**/vault-test*.md

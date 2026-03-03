@@ -15,7 +15,7 @@ async function main() {
     setLogLevel(config.LOG_LEVEL);
 
     log.info('뇽죵이 Agent v0.1.0 starting...');
-    log.info(`Obsidian Vault: ${config.OBSIDIAN_VAULT_PATH}`);
+    log.info(`Obsidian API: ${config.OBSIDIAN_API_URL}`);
     log.info(`Ollama URL: ${config.OLLAMA_URL}`);
     log.info(`Transport: ${config.MCP_TRANSPORT}`);
 

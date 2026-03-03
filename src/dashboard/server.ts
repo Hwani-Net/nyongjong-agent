@@ -1469,14 +1469,17 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
         issues.push(`taskManager: ${err instanceof Error ? err.message : 'unavailable'}`);
       }
 
-      // 3. Obsidian vault (critical — must be able to read/write memory)
+      // 3. Obsidian REST API (critical — must be able to read/write memory)
       let obsidianOk = false;
       try {
-        const { stat } = await import('fs/promises');
-        await stat(config.OBSIDIAN_VAULT_PATH);
-        obsidianOk = true;
+        const apiRes = await fetch(`${config.OBSIDIAN_API_URL}/`, {
+          headers: { Authorization: `Bearer ${config.OBSIDIAN_API_KEY}` },
+          signal: AbortSignal.timeout(2000),
+        });
+        obsidianOk = apiRes.ok;
+        if (!obsidianOk) issues.push(`obsidian: REST API returned ${apiRes.status}`);
       } catch {
-        issues.push(`obsidian: vault path inaccessible (${config.OBSIDIAN_VAULT_PATH})`);
+        issues.push('obsidian: REST API unreachable (is Obsidian running?)');
       }
 
       // 4. Version from package.json (non-critical)

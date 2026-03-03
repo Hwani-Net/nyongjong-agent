@@ -127,7 +127,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
   registry.register('stitch_forum_check', 'stitch', 'Check Stitch forum for new posts via RSS');
 
   // Initialize core modules
-  const store = new ObsidianStore({ vaultPath: config.OBSIDIAN_VAULT_PATH });
+  const store = new ObsidianStore({ apiKey: config.OBSIDIAN_API_KEY, apiUrl: config.OBSIDIAN_API_URL });
   const taskManager = new TaskManager({
     store,
     agentDataDir: config.AGENT_DATA_DIR,
@@ -178,7 +178,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
             status: 'running',
             version: AGENT_VERSION,
             activeTask: activeTask ? { id: activeTask.id, title: activeTask.title } : null,
-            obsidianVault: config.OBSIDIAN_VAULT_PATH,
+            obsidianApi: config.OBSIDIAN_API_URL,
             ollamaUrl: config.OLLAMA_URL,
             toolGroups: summary,
           }, null, 2),
