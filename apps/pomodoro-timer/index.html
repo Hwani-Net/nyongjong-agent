@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🍅 뽀모도로 — 집중 타이머</title>
+  <meta name="description" content="아름다운 포모도로 타이머로 집중력을 높이세요. 25분 집중, 5분 휴식 사이클.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ──────────── CSS Variables ──────────── */
+    :root {
+      --bg-primary: #FAFAFA;
+      --bg-secondary: #FFFFFF;
+      --bg-card: rgba(255, 255, 255, 0.7);
+      --text-primary: hsl(220 15% 15%);
+      --text-secondary: hsl(220 10% 45%);
+      --text-muted: hsl(220 8% 65%);
+      --accent-cyan: #06B6D4;
+      --accent-purple: #8B5CF6;
+      --accent-green: #10B981;
+      --accent-green-light: #34D399;
+      --accent-orange: #F59E0B;
+      --border-color: rgba(0, 0, 0, 0.06);
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+      --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
+      --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.1);
+      --glass-bg: rgba(255, 255, 255, 0.65);
+      --glass-border: rgba(255, 255, 255, 0.5);
+      --glass-blur: 20px;
+      --ring-track: rgba(0, 0, 0, 0.06);
+      --dot-inactive: rgba(0, 0, 0, 0.1);
+      --btn-secondary-bg: rgba(0, 0, 0, 0.04);
+      --btn-secondary-hover: rgba(0, 0, 0, 0.08);
+    }
+
+    [data-theme="dark"] {
+      --bg-primary: #0F172A;
+      --bg-secondary: #1E293B;
+      --bg-card: rgba(30, 41, 59, 0.7);
+      --text-primary: hsl(210 40% 96%);
+      --text-secondary: hsl(215 20% 65%);
+      --text-muted: hsl(215 15% 50%);
+      --border-color: rgba(255, 255, 255, 0.06);
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.3);
+      --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+      --glass-bg: rgba(30, 41, 59, 0.65);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --ring-track: rgba(255, 255, 255, 0.08);
+      --dot-inactive: rgba(255, 255, 255, 0.15);
+      --btn-secondary-bg: rgba(255, 255, 255, 0.06);
+      --btn-secondary-hover: rgba(255, 255, 255, 0.1);
+    }
+
+    /* ──────────── Reset & Base ──────────── */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transition: background 0.4s ease, color 0.3s ease;
+      overflow: hidden;
+    }
+
+    /* ──────────── Animated Background ──────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(ellipse at 30% 20%, rgba(6, 182, 212, 0.08) 0%, transparent 50%),
+                  radial-gradient(ellipse at 70% 80%, rgba(139, 92, 246, 0.06) 0%, transparent 50%);
+      animation: bgFloat 20s ease-in-out infinite;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    [data-theme="dark"] body::before {
+      background: radial-gradient(ellipse at 30% 20%, rgba(6, 182, 212, 0.12) 0%, transparent 50%),
+                  radial-gradient(ellipse at 70% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
+    }
+
+    @keyframes bgFloat {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      33% { transform: translate(2%, -1%) rotate(1deg); }
+      66% { transform: translate(-1%, 2%) rotate(-1deg); }
+    }
+
+    /* ──────────── App Container ──────────── */
+    .app {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 420px;
+      min-height: 100vh;
+      padding: 24px 24px 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ──────────── Header ──────────── */
+    .header {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .logo {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 20px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .theme-toggle {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      background: var(--glass-bg);
+      backdrop-filter: blur(var(--glass-blur));
+      -webkit-backdrop-filter: blur(var(--glass-blur));
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      transition: all 0.3s ease;
+      color: var(--text-secondary);
+    }
+
+    .theme-toggle:hover {
+      transform: scale(1.05);
+      box-shadow: var(--shadow-md);
+    }
+
+    /* ──────────── Session Dots ──────────── */
+    .session-dots {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+
+    .session-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--dot-inactive);
+      transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .session-dot.completed {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      box-shadow: 0 0 10px rgba(6, 182, 212, 0.4);
+      transform: scale(1.15);
+    }
+
+    .session-dot.active {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      animation: dotPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes dotPulse {
+      0%, 100% { box-shadow: 0 0 6px rgba(6, 182, 212, 0.3); transform: scale(1); }
+      50% { box-shadow: 0 0 14px rgba(6, 182, 212, 0.6); transform: scale(1.2); }
+    }
+
+    /* ──────────── Timer Ring ──────────── */
+    .timer-container {
+      position: relative;
+      width: 280px;
+      height: 280px;
+      margin-bottom: 24px;
+    }
+
+    .timer-ring {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+
+    .timer-ring .track {
+      fill: none;
+      stroke: var(--ring-track);
+      stroke-width: 8;
+    }
+
+    .timer-ring .progress {
+      fill: none;
+      stroke-width: 8;
+      stroke-linecap: round;
+      stroke-dasharray: 816.8;
+      stroke-dashoffset: 0;
+      transition: stroke-dashoffset 0.5s ease;
+      filter: drop-shadow(0 0 8px rgba(6, 182, 212, 0.35));
+    }
+
+    .timer-ring .progress.focus {
+      stroke: url(#focusGrad);
+    }
+
+    .timer-ring .progress.break {
+      stroke: url(#breakGrad);
+    }
+
+    .timer-content {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+
+    .timer-time {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 64px;
+      letter-spacing: -2px;
+      line-height: 1;
+      color: var(--text-primary);
+    }
+
+    .timer-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-top: 8px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    /* ──────────── Mode Tabs ──────────── */
+    .mode-tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--btn-secondary-bg);
+      border-radius: 14px;
+      padding: 4px;
+      margin-bottom: 32px;
+    }
+
+    .mode-tab {
+      padding: 10px 20px;
+      border-radius: 11px;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .mode-tab.active {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .mode-tab:hover:not(.active) {
+      color: var(--text-primary);
+    }
+
+    /* ──────────── Control Buttons ──────────── */
+    .controls {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 40px;
+    }
+
+    .btn-primary {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      color: white;
+      font-size: 28px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 20px rgba(6, 182, 212, 0.35);
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .btn-primary:hover {
+      transform: scale(1.08);
+      box-shadow: 0 6px 28px rgba(6, 182, 212, 0.5);
+    }
+
+    .btn-primary:active {
+      transform: scale(0.95);
+    }
+
+    .btn-primary.break-mode {
+      background: linear-gradient(135deg, var(--accent-green), var(--accent-green-light));
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.35);
+    }
+
+    .btn-secondary {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1px solid var(--border-color);
+      background: var(--glass-bg);
+      backdrop-filter: blur(var(--glass-blur));
+      -webkit-backdrop-filter: blur(var(--glass-blur));
+      color: var(--text-secondary);
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+    }
+
+    .btn-secondary:hover {
+      transform: scale(1.08);
+      background: var(--btn-secondary-hover);
+    }
+
+    /* ──────────── Stats Card ──────────── */
+    .stats-card {
+      width: 100%;
+      background: var(--glass-bg);
+      backdrop-filter: blur(var(--glass-blur));
+      -webkit-backdrop-filter: blur(var(--glass-blur));
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: var(--shadow-md);
+    }
+
+    .stats-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 16px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 28px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* ──────────── Settings Modal ──────────── */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .modal {
+      background: var(--bg-secondary);
+      border-radius: 24px;
+      padding: 32px;
+      width: 90%;
+      max-width: 360px;
+      box-shadow: var(--shadow-lg);
+      transform: translateY(20px) scale(0.95);
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .modal-overlay.active .modal {
+      transform: translateY(0) scale(1);
+    }
+
+    .modal-title {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 20px;
+      margin-bottom: 24px;
+    }
+
+    .setting-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .setting-row:last-child {
+      border-bottom: none;
+    }
+
+    .setting-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .setting-input {
+      width: 72px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      background: var(--btn-secondary-bg);
+      color: var(--text-primary);
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 16px;
+      text-align: center;
+      outline: none;
+      transition: border-color 0.3s ease;
+    }
+
+    .setting-input:focus {
+      border-color: var(--accent-cyan);
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .btn-modal {
+      flex: 1;
+      padding: 12px;
+      border-radius: 12px;
+      border: none;
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn-modal.cancel {
+      background: var(--btn-secondary-bg);
+      color: var(--text-secondary);
+    }
+
+    .btn-modal.save {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      color: white;
+      box-shadow: 0 2px 12px rgba(6, 182, 212, 0.3);
+    }
+
+    .btn-modal:hover {
+      transform: translateY(-1px);
+    }
+
+    /* ──────────── Notification Toast ──────────── */
+    .toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-100px);
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 16px 24px;
+      box-shadow: var(--shadow-lg);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 14px;
+      font-weight: 500;
+      transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+      max-width: 90%;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .toast-icon {
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+
+    /* ──────────── Animations ──────────── */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .app > * {
+      animation: fadeIn 0.6s ease backwards;
+    }
+
+    .app > *:nth-child(1) { animation-delay: 0.05s; }
+    .app > *:nth-child(2) { animation-delay: 0.1s; }
+    .app > *:nth-child(3) { animation-delay: 0.15s; }
+    .app > *:nth-child(4) { animation-delay: 0.2s; }
+    .app > *:nth-child(5) { animation-delay: 0.25s; }
+    .app > *:nth-child(6) { animation-delay: 0.3s; }
+
+    /* ──────────── Responsive ──────────── */
+    @media (max-height: 700px) {
+      .timer-container { width: 220px; height: 220px; }
+      .timer-time { font-size: 48px; }
+      .controls { margin-bottom: 24px; }
+    }
+
+    @media (min-width: 500px) {
+      body { padding: 20px; }
+      .app { min-height: auto; border-radius: 32px; background: var(--glass-bg); backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur)); border: 1px solid var(--glass-border); box-shadow: var(--shadow-lg); padding: 40px 32px; max-height: 800px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Toast Notification -->
+  <div class="toast" id="toast">
+    <span class="toast-icon" id="toastIcon">🍅</span>
+    <span id="toastMsg">집중 시간이 끝났어요! 휴식하세요.</span>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+      <h2 class="modal-title">⚙️ 설정</h2>
+      <div class="setting-row">
+        <span class="setting-label">집중 시간 (분)</span>
+        <input type="number" class="setting-input" id="setFocus" value="25" min="1" max="120">
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">짧은 휴식 (분)</span>
+        <input type="number" class="setting-input" id="setBreak" value="5" min="1" max="30">
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">긴 휴식 (분)</span>
+        <input type="number" class="setting-input" id="setLongBreak" value="15" min="1" max="60">
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">세션 목표 (개)</span>
+        <input type="number" class="setting-input" id="setGoal" value="4" min="1" max="12">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-modal cancel" id="cancelSettings">취소</button>
+        <button class="btn-modal save" id="saveSettings">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="app">
+    <!-- Header -->
+    <div class="header">
+      <span class="logo">🍅 뽀모도로</span>
+      <div style="display:flex;gap:8px;">
+        <button class="theme-toggle" id="settingsBtn" title="설정">⚙️</button>
+        <button class="theme-toggle" id="themeBtn" title="테마 변경">🌙</button>
+      </div>
+    </div>
+
+    <!-- Session Progress Dots -->
+    <div class="session-dots" id="sessionDots">
+      <div class="session-dot active"></div>
+      <div class="session-dot"></div>
+      <div class="session-dot"></div>
+      <div class="session-dot"></div>
+    </div>
+
+    <!-- Timer Ring -->
+    <div class="timer-container">
+      <svg class="timer-ring" viewBox="0 0 280 280">
+        <defs>
+          <linearGradient id="focusGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#06B6D4"/>
+            <stop offset="100%" stop-color="#8B5CF6"/>
+          </linearGradient>
+          <linearGradient id="breakGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#10B981"/>
+            <stop offset="100%" stop-color="#34D399"/>
+          </linearGradient>
+        </defs>
+        <circle class="track" cx="140" cy="140" r="130"/>
+        <circle class="progress focus" id="progressRing" cx="140" cy="140" r="130"/>
+      </svg>
+      <div class="timer-content">
+        <div class="timer-time" id="timerDisplay">25:00</div>
+        <div class="timer-label" id="timerLabel">집중 시간</div>
+      </div>
+    </div>
+
+    <!-- Mode Tabs -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" data-mode="focus">🎯 집중</button>
+      <button class="mode-tab" data-mode="break">☕ 휴식</button>
+      <button class="mode-tab" data-mode="longBreak">🌿 긴 휴식</button>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <button class="btn-secondary" id="skipBtn" title="건너뛰기">⏭️</button>
+      <button class="btn-primary" id="startBtn" title="시작/일시정지">▶️</button>
+      <button class="btn-secondary" id="resetBtn" title="리셋">🔄</button>
+    </div>
+
+    <!-- Stats Card -->
+    <div class="stats-card">
+      <div class="stats-title">📊 오늘의 기록</div>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-value" id="statSessions">0</div>
+          <div class="stat-label">완료 세션</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="statMinutes">0</div>
+          <div class="stat-label">집중 (분)</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="statGoal">0%</div>
+          <div class="stat-label">목표 달성</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audio for notification -->
+  <audio id="alarmSound" preload="auto">
+    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgkKq0pHdNPFN/o7CshmI+RXCYsrSlfFI7TXqdta2Fd0o6UHuesrGoh2I/R3OctbKleFM+UX2itrOmc0g3U4CktbGohWE/SXWetbOjdVM/U36jtbOlc0g5VIGltLGnhGI/S3eftbKieVQ/VH+ktbKkcUg7VoKmtLCmg2RBTHygtbKkeVQ/Vn+ltLGjcUk9V4OntK+lg2VCTnyhtbGieFVBV4CmtLCicEl/WISotK6jgmdET32itK+gd1dDWYKntK+gcUqAWoWptK2hf2lGUH6jtK6ed1hFW4OntrGhbkuCXIertKuefWtIUoCktK2bdVpHXoOotK+dak2EXoittKmceW1KVIKltKyZc1xKYIWptK2aZ06HYIqutKiXdW9MV4OmtKuWb15MY4eptKuUZFCKYo2wtKWUcHFPWYSmtKmTa2BPZY2qtKmRYVKNZZCztKKQcHRSXIamtKaQZ2JSaI+rtKeOXFWSaJO2tJ6NcHdVX4emtKKLZGVVa5GttKWKV1mVbJi4tJiJb3tZYoims5+IYWlZb5SvtKKGUl2Zcpy7tJOFbH5dZYmms5yEXW1dc5ewtJ6ATV+dd6C9tIuBaYJhaoums5d+WnJifJqytJl7SWKffaTA" type="audio/wav">
+  </audio>
+
+  <script>
+    // ──────────── State ────────────
+    const CIRCUMFERENCE = 2 * Math.PI * 130; // ~816.8
+
+    let config = {
+      focus: 25,
+      break: 5,
+      longBreak: 15,
+      goal: 4
+    };
+
+    let state = {
+      mode: 'focus',       // 'focus' | 'break' | 'longBreak'
+      timeLeft: config.focus * 60,
+      totalTime: config.focus * 60,
+      isRunning: false,
+      sessionsCompleted: 0,
+      totalFocusMinutes: 0,
+      intervalId: null
+    };
+
+    // ──────────── DOM Refs ────────────
+    const timerDisplay = document.getElementById('timerDisplay');
+    const timerLabel = document.getElementById('timerLabel');
+    const progressRing = document.getElementById('progressRing');
+    const startBtn = document.getElementById('startBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const skipBtn = document.getElementById('skipBtn');
+    const sessionDots = document.getElementById('sessionDots');
+    const themeBtn = document.getElementById('themeBtn');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsModal = document.getElementById('settingsModal');
+    const cancelSettings = document.getElementById('cancelSettings');
+    const saveSettings = document.getElementById('saveSettings');
+    const toast = document.getElementById('toast');
+    const toastIcon = document.getElementById('toastIcon');
+    const toastMsg = document.getElementById('toastMsg');
+    const statSessions = document.getElementById('statSessions');
+    const statMinutes = document.getElementById('statMinutes');
+    const statGoal = document.getElementById('statGoal');
+    const modeTabs = document.querySelectorAll('.mode-tab');
+
+    // ──────────── Theme ────────────
+    const savedTheme = localStorage.getItem('pomo-theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    themeBtn.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+
+    themeBtn.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      themeBtn.textContent = next === 'dark' ? '☀️' : '🌙';
+      localStorage.setItem('pomo-theme', next);
+    });
+
+    // ──────────── Settings ────────────
+    settingsBtn.addEventListener('click', () => {
+      document.getElementById('setFocus').value = config.focus;
+      document.getElementById('setBreak').value = config.break;
+      document.getElementById('setLongBreak').value = config.longBreak;
+      document.getElementById('setGoal').value = config.goal;
+      settingsModal.classList.add('active');
+    });
+
+    cancelSettings.addEventListener('click', () => settingsModal.classList.remove('active'));
+    settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) settingsModal.classList.remove('active'); });
+
+    saveSettings.addEventListener('click', () => {
+      config.focus = Math.max(1, parseInt(document.getElementById('setFocus').value) || 25);
+      config.break = Math.max(1, parseInt(document.getElementById('setBreak').value) || 5);
+      config.longBreak = Math.max(1, parseInt(document.getElementById('setLongBreak').value) || 15);
+      config.goal = Math.max(1, parseInt(document.getElementById('setGoal').value) || 4);
+      settingsModal.classList.remove('active');
+      resetTimer();
+      renderDots();
+      localStorage.setItem('pomo-config', JSON.stringify(config));
+    });
+
+    // Load saved config
+    const savedConfig = localStorage.getItem('pomo-config');
+    if (savedConfig) { Object.assign(config, JSON.parse(savedConfig)); resetTimer(); }
+
+    // ──────────── Timer Logic ────────────
+    function startTimer() {
+      if (state.isRunning) {
+        pauseTimer();
+        return;
+      }
+      state.isRunning = true;
+      startBtn.textContent = '⏸️';
+      state.intervalId = setInterval(() => {
+        state.timeLeft--;
+        if (state.timeLeft <= 0) {
+          clearInterval(state.intervalId);
+          state.isRunning = false;
+          startBtn.textContent = '▶️';
+          onTimerComplete();
+        }
+        updateDisplay();
+      }, 1000);
+    }
+
+    function pauseTimer() {
+      clearInterval(state.intervalId);
+      state.isRunning = false;
+      startBtn.textContent = '▶️';
+    }
+
+    function resetTimer() {
+      pauseTimer();
+      const durations = { focus: config.focus, break: config.break, longBreak: config.longBreak };
+      state.totalTime = durations[state.mode] * 60;
+      state.timeLeft = state.totalTime;
+      updateDisplay();
+    }
+
+    function skipTimer() {
+      pauseTimer();
+      onTimerComplete();
+    }
+
+    function onTimerComplete() {
+      // Play sound
+      try { document.getElementById('alarmSound').play().catch(() => {}); } catch(e) {}
+
+      // Notification
+      if (Notification.permission === 'granted') {
+        const msg = state.mode === 'focus' ? '집중 시간 완료! 🎉 휴식하세요.' : '휴식 끝! 다시 집중할 시간이에요. 💪';
+        new Notification('뽀모도로 타이머', { body: msg, icon: '🍅' });
+      }
+
+      if (state.mode === 'focus') {
+        state.sessionsCompleted++;
+        state.totalFocusMinutes += config.focus;
+        showToast('🎉', `${state.sessionsCompleted}번째 세션 완료! 쉬어가세요.`);
+
+        // Switch to break
+        if (state.sessionsCompleted % config.goal === 0) {
+          switchMode('longBreak');
+        } else {
+          switchMode('break');
+        }
+      } else {
+        showToast('💪', '휴식 끝! 다시 집중할 시간이에요.');
+        switchMode('focus');
+      }
+      updateStats();
+      renderDots();
+    }
+
+    function switchMode(mode) {
+      state.mode = mode;
+      const durations = { focus: config.focus, break: config.break, longBreak: config.longBreak };
+      state.totalTime = durations[mode] * 60;
+      state.timeLeft = state.totalTime;
+
+      // Update UI
+      const labels = { focus: '집중 시간', break: '휴식 시간', longBreak: '긴 휴식' };
+      timerLabel.textContent = labels[mode];
+
+      progressRing.classList.remove('focus', 'break');
+      progressRing.classList.add(mode === 'focus' ? 'focus' : 'break');
+
+      startBtn.classList.toggle('break-mode', mode !== 'focus');
+
+      modeTabs.forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.mode === mode);
+      });
+
+      updateDisplay();
+    }
+
+    function updateDisplay() {
+      const mins = Math.floor(state.timeLeft / 60);
+      const secs = state.timeLeft % 60;
+      timerDisplay.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+      // Update ring
+      const progress = state.timeLeft / state.totalTime;
+      const offset = CIRCUMFERENCE * (1 - progress);
+      progressRing.style.strokeDasharray = CIRCUMFERENCE;
+      progressRing.style.strokeDashoffset = offset;
+
+      // Update page title
+      document.title = `${timerDisplay.textContent} — 뽀모도로`;
+    }
+
+    function updateStats() {
+      statSessions.textContent = state.sessionsCompleted;
+      statMinutes.textContent = state.totalFocusMinutes;
+      const goalPercent = Math.min(100, Math.round((state.sessionsCompleted / config.goal) * 100));
+      statGoal.textContent = goalPercent + '%';
+    }
+
+    function renderDots() {
+      sessionDots.innerHTML = '';
+      for (let i = 0; i < config.goal; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'session-dot';
+        if (i < state.sessionsCompleted) dot.classList.add('completed');
+        else if (i === state.sessionsCompleted && state.mode === 'focus') dot.classList.add('active');
+        sessionDots.appendChild(dot);
+      }
+    }
+
+    function showToast(icon, msg) {
+      toastIcon.textContent = icon;
+      toastMsg.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3500);
+    }
+
+    // ──────────── Event Listeners ────────────
+    startBtn.addEventListener('click', startTimer);
+    resetBtn.addEventListener('click', resetTimer);
+    skipBtn.addEventListener('click', skipTimer);
+
+    modeTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        pauseTimer();
+        switchMode(tab.dataset.mode);
+      });
+    });
+
+    // Request notification permission
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    // ──────────── Keyboard Shortcuts ────────────
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      if (e.code === 'Space') { e.preventDefault(); startTimer(); }
+      if (e.key === 'r' || e.key === 'R') resetTimer();
+      if (e.key === 's' || e.key === 'S') skipTimer();
+    });
+
+    // ──────────── Init ────────────
+    renderDots();
+    updateDisplay();
+    updateStats();
+  </script>
+</body>
+</html>
