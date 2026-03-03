@@ -11,8 +11,8 @@
 | **버전** | `0.6.0` |
 | **경로** | `E:\Agent\뇽죵이Agent` |
 | **런타임** | Node.js ≥22, TypeScript, ESM |
-| **테스트** | vitest — **246/246 pass** (19 파일) |
-| **MCP 도구** | **28개** (core 3 + toggle 25) |
+| **테스트** | vitest — **287/287 pass** (22 파일) |
+| **MCP 도구** | **31개** (core 3 + toggle 28) |
 | **프로토콜** | Model Context Protocol (stdio) |
 
 ## 🏗️ 아키텍처 개요
@@ -49,15 +49,18 @@ src/
   - [x] `mcp-server.ts`에 import + registry + server.tool 등록
   - [x] tsc --noEmit 통과
   - [x] npm test 246/246 pass
-- [ ] Phase 0.6 마무리: CHANGELOG 업데이트, 버전 범프 (0.5.1 → 0.6.0)
-- [ ] Git commit & push
+- [x] Phase 0.6 마무리: CHANGELOG 업데이트, 버전 범프 (0.5.1 → 0.6.0)
+- [x] Stitch 유닛 테스트 41개 추가 (ideate 12 + design-system 17 + forum 12)
+- [x] README.md v0.6.0 업데이트 (31 tools, 287 tests, Stitch 섹션)
+- [x] npm build 성공 (205KB 패키지)
+- [x] Dashboard에 Stitch Design 페이지 추가 (13번째 페이지)
+- [x] 미커밋 파일 정리 및 Git 커밋 (6개 커밋)
+- [ ] Git push (원경 저장소 미설정)
 
 ### TODO (미래)
-- [ ] Stitch 도구 E2E 테스트 (실제 Stitch MCP 호출)
-- [ ] Stitch 도구 유닛 테스트 추가
-- [ ] npm publish 준비 (README 업데이트)
-- [ ] Dashboard에 Stitch 섹션 추가
-- [ ] persona_generate 도구 복원 (registry 등록 누락?)
+- [ ] Git 원경 저장소 설정 + push
+- [ ] npm publish (npmjs.com 배포)
+- [ ] Dashboard Stitch 페이지에 라이브 데이터 연동 (실시간 포럼 모니터링)
 
 ## 🔧 ADR (Architecture Decision Records)
 
