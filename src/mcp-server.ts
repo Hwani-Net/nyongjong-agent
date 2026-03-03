@@ -391,6 +391,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       stage: z.enum(['understand', 'prototype', 'validate', 'evolve', 'report']).describe('Current workflow stage'),
       topic: z.string().describe('Topic to consult about'),
       maxPersonas: z.number().optional().describe('Max number of personas to consult (default: 3)'),
+      taskType: z.string().optional().describe('Task type for Role Card situation rules'),
     },
     async (params) => {
       if (!registry.isEnabled('persona_consult')) {
@@ -433,6 +434,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
         maxPersonas: params.maxPersonas,
         suggestedPersonas: allSuggested,
         autoCreate: true,
+        taskType: params.taskType,
       });
 
       if (plan.consultations.length > 0) {
@@ -466,7 +468,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     {
       id: z.string().describe('Unique persona ID (e.g., "devops-engineer")'),
       name: z.string().describe('Display name (e.g., "DevOps 엔지니어")'),
-      category: z.enum(['customer', 'philosopher', 'business', 'engineer', 'regulatory', 'temporal']).describe('Persona category'),
+      category: z.enum(['customer', 'philosopher', 'business', 'engineer', 'regulatory', 'temporal', 'designer']).describe('Persona category'),
       activatedAt: z.array(z.enum(['understand', 'prototype', 'validate', 'evolve', 'report'])).describe('Workflow stages to activate'),
       priority: z.enum(['low', 'normal', 'high', 'critical']).optional().describe('Priority (default: normal)'),
       content: z.string().describe('Full persona description text'),
@@ -496,7 +498,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     {
       id: z.string().describe('Persona ID to update'),
       name: z.string().optional().describe('New display name'),
-      category: z.enum(['customer', 'philosopher', 'business', 'engineer', 'regulatory', 'temporal']).optional().describe('New category'),
+      category: z.enum(['customer', 'philosopher', 'business', 'engineer', 'regulatory', 'temporal', 'designer']).optional().describe('New category'),
       activatedAt: z.array(z.enum(['understand', 'prototype', 'validate', 'evolve', 'report'])).optional().describe('New activation stages'),
       priority: z.enum(['low', 'normal', 'high', 'critical']).optional().describe('New priority'),
       content: z.string().optional().describe('New description text'),

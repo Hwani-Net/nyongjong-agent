@@ -1,6 +1,7 @@
 // Persona engine — context-aware automatic persona selection and consultation
 import { PersonaLoader, type Persona, type PersonaCategory } from './persona-loader.js';
 import type { PersonaTemplate } from './persona-templates.js';
+import { findRoleCard, buildRoleCardPrompt, buildSituationPrompt } from './role-cards.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('persona-engine');
@@ -22,6 +23,8 @@ export interface ConsultationRequest {
   suggestedPersonas?: PersonaTemplate[];
   /** Whether to auto-create suggested personas that don't exist yet */
   autoCreate?: boolean;
+  /** Optional: task type for situation-specific Role Card rules */
+  taskType?: string;
 }
 
 export interface PersonaConsultation {
@@ -60,7 +63,7 @@ export class PersonaEngine {
    * and generates prompts for each.
    */
   async createConsultationPlan(request: ConsultationRequest): Promise<ConsultationPlan> {
-    const { stage, topic, includePersonas, categories, maxPersonas = 3, suggestedPersonas, autoCreate = true } = request;
+    const { stage, topic, includePersonas, categories, maxPersonas = 3, suggestedPersonas, autoCreate = true, taskType } = request;
     log.info(`Creating consultation plan for stage: ${stage}`, { topic });
 
     let candidates: Persona[] = [];
@@ -106,10 +109,10 @@ export class PersonaEngine {
     // Limit count
     const selected = candidates.slice(0, maxPersonas);
 
-    // Generate consultation prompts
+    // Generate consultation prompts (with Role Card injection)
     const consultations: PersonaConsultation[] = selected.map((persona) => ({
       persona,
-      prompt: this.buildPrompt(persona, stage, topic),
+      prompt: this.buildPrompt(persona, stage, topic, taskType),
     }));
 
     log.info(`Consultation plan: ${consultations.length} personas selected`, {
@@ -146,22 +149,33 @@ export class PersonaEngine {
 
   /**
    * Build the LLM prompt for a persona consultation.
+   * Injects Role Card communication protocol when a matching card is found.
    */
-  private buildPrompt(persona: Persona, stage: WorkflowStage, topic: string): string {
+  private buildPrompt(persona: Persona, stage: WorkflowStage, topic: string, taskType?: string): string {
+    // Try to find a matching Role Card for structured communication
+    const roleCard = findRoleCard(persona);
+    const roleCardSection = roleCard ? buildRoleCardPrompt(roleCard) : '';
+    const situationSection = roleCard ? buildSituationPrompt(roleCard, taskType) : '';
+
     return [
       `You are role-playing as "${persona.name}" (${persona.category} persona).`,
       '',
       '## Your Character',
       persona.content,
       '',
+      // Inject Role Card communication protocol if available
+      ...(roleCardSection ? [roleCardSection, ''] : []),
+      ...(situationSection ? [situationSection, ''] : []),
       `## Current Context`,
       `- Workflow stage: ${stage}`,
       `- Topic: ${topic}`,
+      ...(taskType ? [`- Task type: ${taskType}`] : []),
       '',
       '## Your Task',
       `As "${persona.name}", provide your perspective on the following topic.`,
       'Stay in character. Be specific and actionable.',
       `Focus on what matters most from your unique viewpoint as a ${persona.category}.`,
+      ...(roleCard ? ['', `⚠️ 반드시 위의 "응답 형식"을 따르세요. 자유 형식 금지.`] : []),
       '',
       `## Topic`,
       topic,

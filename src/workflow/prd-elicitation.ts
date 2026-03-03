@@ -104,7 +104,7 @@ export async function runPRDElicitation(
     log.info(`PRD review round ${rounds}/${maxRounds}`);
 
     // Get customer verdicts
-    verdicts = await reviewByCustomerPersonas(prd, goal, personaEngine, simulator);
+    verdicts = await reviewByCustomerPersonas(prd, goal, analysis.analysis.taskType, personaEngine, simulator);
 
     // Check if all satisfied (no blockers)
     allSatisfied = verdicts.every(v => v.blockers.length === 0);
@@ -300,6 +300,7 @@ function generateMustNots(taskType: string, risks: string[]): string[] {
 async function reviewByCustomerPersonas(
   prd: PRDDocument,
   goal: string,
+  taskType: string,
   personaEngine: PersonaEngine,
   simulator?: PersonaSimulator,
 ): Promise<CustomerVerdict[]> {
@@ -312,6 +313,7 @@ async function reviewByCustomerPersonas(
     includePersonas: CUSTOMER_PERSONA_IDS,
     categories: ['customer'],
     maxPersonas: 3,
+    taskType,
   });
 
   // Generate verdicts

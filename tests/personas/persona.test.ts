@@ -191,3 +191,97 @@ describe('PersonaEngine (real fs)', () => {
     expect(plan.consultations.length).toBeGreaterThanOrEqual(1);
   });
 });
+
+// ─── Role Card System ───────────────────────────────────────────────────────
+import { BUILTIN_ROLE_CARDS, findRoleCard, buildRoleCardPrompt, buildSituationPrompt } from '../../src/personas/role-cards.js';
+import type { Persona } from '../../src/personas/persona-loader.js';
+
+describe('Role Card System', () => {
+  it('should have 6 built-in Role Cards (CTO, QA, CEO, Designer, DevRel, Angry User)', () => {
+    expect(BUILTIN_ROLE_CARDS.length).toBe(6);
+
+    const ids = BUILTIN_ROLE_CARDS.map((c) => c.id);
+    expect(ids).toContain('cto-jihoon');
+    expect(ids).toContain('qa-soojin');
+    expect(ids).toContain('ceo-minsu');
+    expect(ids).toContain('designer-yuna');
+    expect(ids).toContain('angry-kim');
+    expect(ids).toContain('devrel-jaehee');
+
+    // Verify each card has required fields
+    for (const card of BUILTIN_ROLE_CARDS) {
+      expect(card.communication.tone).toBeTruthy();
+      expect(card.communication.style).toBeTruthy();
+      expect(card.communication.catchphrases.length).toBeGreaterThan(0);
+      expect(card.responseTemplate.format).toBeTruthy();
+      expect(Object.keys(card.situationRules).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('should match Role Card by persona category', () => {
+    const engineerPersona: Persona = {
+      id: 'test-eng', name: '엔지니어', category: 'engineer',
+      era: '2024', activatedAt: ['validate'], priority: 'normal',
+      content: '엔지니어 페르소나',
+      metadata: {},
+    };
+
+    const businessPersona: Persona = {
+      id: 'test-biz', name: '사업가', category: 'business',
+      era: '2024', activatedAt: ['understand'], priority: 'normal',
+      content: '사업 페르소나',
+      metadata: {},
+    };
+
+    const designerPersona: Persona = {
+      id: 'test-ui', name: 'UI 디자이너', category: 'designer',
+      era: '2024', activatedAt: ['prototype'], priority: 'normal',
+      content: '디자이너 페르소나',
+      metadata: {},
+    };
+
+    const engCard = findRoleCard(engineerPersona);
+    expect(engCard).not.toBeNull();
+    expect(engCard!.role).toBe('CTO');
+
+    const bizCard = findRoleCard(businessPersona);
+    expect(bizCard).not.toBeNull();
+    expect(bizCard!.role).toBe('CEO');
+
+    const uiCard = findRoleCard(designerPersona);
+    expect(uiCard).not.toBeNull();
+    expect(uiCard!.role).toBe('리드 디자이너');
+  });
+
+  it('should inject Role Card into buildPrompt for engineer persona', async () => {
+    const loader = makeLoader();
+    await loader.createPersona({
+      id: 'cto-test',
+      name: 'CTO 테스트',
+      category: 'engineer',
+      era: '2024',
+      activatedAt: ['prototype'],
+      priority: 'high',
+      content: '기술 리더',
+    });
+
+    const engine = new PersonaEngine(loader);
+    const plan = await engine.createConsultationPlan({
+      stage: 'prototype',
+      topic: '아키텍처 검토',
+      maxPersonas: 1,
+      taskType: 'architecture',
+    });
+
+    expect(plan.consultations.length).toBe(1);
+    const prompt = plan.consultations[0].prompt;
+
+    // Role Card communication protocol should be injected
+    expect(prompt).toContain('커뮤니케이션 프로토콜');
+    expect(prompt).toContain('톤 & 말투');
+    expect(prompt).toContain('응답 형식');
+    // Situation rule for architecture should be present
+    expect(prompt).toContain('특별 규칙');
+    expect(prompt).toContain('architecture');
+  });
+});

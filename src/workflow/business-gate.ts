@@ -173,6 +173,7 @@ export async function runBusinessGate(
     includePersonas: BUSINESS_PERSONA_IDS,
     categories: ['business'],
     maxPersonas: 3,
+    taskType: analysis.analysis.taskType,
   });
 
   // Generate reviews — LLM if simulator available, heuristic fallback otherwise

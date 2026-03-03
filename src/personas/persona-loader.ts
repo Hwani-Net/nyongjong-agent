@@ -10,7 +10,8 @@ export type PersonaCategory =
   | 'business'
   | 'engineer'
   | 'regulatory'
-  | 'temporal';
+  | 'temporal'
+  | 'designer';
 
 export interface Persona {
   id: string;
