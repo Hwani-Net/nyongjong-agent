@@ -1,11 +1,11 @@
 {
-  "name": "naedon-agent",
-  "version": "0.5.0",
+  "name": "nyongjong-agent",
+  "version": "0.6.0",
   "description": "뇽죵이 에이전트 — AI-native autonomous agent server with MCP protocol, Obsidian memory, multi-model support, and dynamic persona system",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "naedon-agent": "dist/index.js"
+    "nyongjong-agent": "dist/index.js"
   },
   "exports": {
     ".": {
@@ -48,16 +48,21 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nongjong/naedon-agent.git"
+    "url": "https://github.com/nongjong/nyongjong-agent.git"
   },
-  "homepage": "https://github.com/nongjong/naedon-agent#readme",
+  "homepage": "https://github.com/nongjong/nyongjong-agent#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
+    "@tavily/core": "^0.7.2",
     "dotenv": "^16.4.7",
+    "execa": "^9.6.1",
     "gray-matter": "^4.0.3",
+    "ollama": "^0.6.3",
+    "openai": "^6.25.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.13.5",
     "@vitest/coverage-v8": "^3.2.4",
     "tsx": "^4.19.3",
@@ -68,4 +73,3 @@
     "node": ">=22.0.0"
   }
 }
-

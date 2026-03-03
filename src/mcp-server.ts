@@ -15,8 +15,16 @@ import { runBusinessGate, formatBusinessGateReport, shouldRunBusinessGate } from
 import { runPRDElicitation } from './workflow/prd-elicitation.js';
 import { classifyFeedback, formatFeedbackReport } from './workflow/feedback-router.js';
 import { GroundingEngine } from './grounding/grounding-engine.js';
+import { researchMarket, shouldResearchMarket, extractCategory, formatAsGroundingData } from './grounding/market-research.js';
 import { CycleRunner } from './workflow/cycle-runner.js';
 import { ShellRunner } from './execution/shell-runner.js';
+import { DynamicPersonaGenerator } from './personas/persona-generator.js';
+import { selfHealRun, completionLoopRun } from './execution/self-heal.js';
+import { runCICDGate, formatCICDGateReport } from './execution/cicd-gate.js';
+import { collectFeedback, formatFeedbackPrompt } from './workflow/feedback-collector.js';
+import { generateIdeatePlan } from './stitch/stitch-ideate.js';
+import { extractDesignTokens } from './stitch/stitch-design-system.js';
+import { checkStitchForum } from './stitch/stitch-forum.js';
 import { createLogger } from './utils/logger.js';
 import { recordGateDecision, setLastGate, setLastPRD } from './core/shared-state.js';
 import { fileURLToPath } from 'url';
@@ -85,6 +93,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
   registry.register('persona_create', 'persona', 'Create a new persona');
   registry.register('persona_update', 'persona', 'Update an existing persona');
   registry.register('persona_delete', 'persona', 'Delete a persona');
+  registry.register('persona_generate', 'persona', 'Generate dynamic personas using Ollama LLM');
 
   // Group: "workflow" — AI circular workflow
   registry.register('analyze_goal', 'workflow', 'Analyze user goal');
@@ -98,6 +107,24 @@ export function createMcpServer(options: McpServerOptions): McpServer {
 
   // Group: "grounding" — data grounding
   registry.register('ground_check', 'grounding', 'Detect and verify factual claims');
+  registry.register('market_research', 'grounding', 'Research market competitors for a category');
+
+  // Group: "critic" — rule compliance monitoring (AgentPRM-based)
+  registry.register('critic_check', 'critic', 'Check rule compliance via Think/Critique/Score');
+
+  // Group: "execution" — direct shell execution
+  registry.register('shell_run', 'execution', 'Run a shell command and return the output');
+
+  // Group: "failsafe" — Phase 3 fail-safe features
+  registry.register('self_heal', 'failsafe', 'Auto-retry failed builds/tests with error analysis');
+  registry.register('completion_loop', 'failsafe', 'Ralph-style completion loop with user-defined iterations');
+  registry.register('cicd_gate', 'failsafe', 'Pre-push quality gate (lint + build + test)');
+  registry.register('feedback_collect', 'failsafe', 'Collect user satisfaction feedback');
+
+  // Group: "stitch" — Stitch design orchestration
+  registry.register('stitch_ideate', 'stitch', 'Generate multi-prompt design comparison plans');
+  registry.register('stitch_design_system_extract', 'stitch', 'Extract design tokens from Stitch HTML');
+  registry.register('stitch_forum_check', 'stitch', 'Check Stitch forum for new posts via RSS');
 
   // Initialize core modules
   const store = new ObsidianStore({ vaultPath: config.OBSIDIAN_VAULT_PATH });
@@ -370,10 +397,42 @@ export function createMcpServer(options: McpServerOptions): McpServer {
         return { content: [{ type: 'text' as const, text: registry.disabledMessage('persona_consult') }] };
       }
       log.info('persona_consult called', params);
+
+      // ── Layer 1: Domain template detection (keyword-based, instant) ──
+      const { detectDomainPersonas } = await import('./personas/persona-templates.js');
+      const domainPersonas = detectDomainPersonas(params.topic);
+      if (domainPersonas.length > 0) {
+        log.info(`Domain templates detected: ${domainPersonas.map(p => p.id).join(', ')}`);
+      }
+
+      // ── Layer 2: LLM dynamic persona generation (project-specific) ──
+      let dynamicPersonas: import('./personas/persona-templates.js').PersonaTemplate[] = [];
+      try {
+        const { DynamicPersonaGenerator } = await import('./personas/persona-generator.js');
+        const generator = new DynamicPersonaGenerator();
+        const health = await personaSimulator.healthCheck();
+        if (health.available) {
+          const existingIds = domainPersonas.map(p => p.id);
+          dynamicPersonas = await generator.generate({
+            goal: params.topic,
+            count: Math.min(params.maxPersonas || 3, 3), // At most 3 dynamic
+            existingPersonaIds: existingIds,
+          });
+          log.info(`Dynamic personas generated: ${dynamicPersonas.map(p => p.id).join(', ')}`);
+        }
+      } catch (e) {
+        log.warn('Dynamic persona generation skipped', { error: String(e) });
+      }
+
+      // ── Merge: templates + dynamic → suggestedPersonas ──
+      const allSuggested = [...domainPersonas, ...dynamicPersonas];
+
       const plan = await personaEngine.createConsultationPlan({
         stage: params.stage,
         topic: params.topic,
         maxPersonas: params.maxPersonas,
+        suggestedPersonas: allSuggested,
+        autoCreate: true,
       });
 
       if (plan.consultations.length > 0) {
@@ -527,6 +586,28 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       }
       const analysis = groundingEngine.quickCheck(params.text);
       return { content: [{ type: 'text' as const, text: JSON.stringify(analysis, null, 2) }] };
+    },
+  );
+
+  // ─── Tool: market_research ───
+  server.tool(
+    'market_research',
+    'Proactive market research — discover competitors and assess market for new projects',
+    {
+      category: z.string().describe('App/service category (e.g., "가계부", "낚시", "법률 상담")'),
+      platform: z.enum(['android', 'ios', 'web']).optional().default('android').describe('Target platform'),
+      goal: z.string().optional().describe('Original goal text for context'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('market_research')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('market_research') }] };
+      }
+      log.info('market_research called', { category: params.category, platform: params.platform });
+
+      const result = await researchMarket(params.category, params.platform, params.goal || '');
+      const formatted = formatAsGroundingData(result);
+
+      return { content: [{ type: 'text' as const, text: formatted }] };
     },
   );
 
@@ -686,12 +767,14 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     {
       goal: z.string().describe('The goal to execute'),
       projectContext: z.string().optional().describe('Existing project context'),
+      skipGates: z.boolean().optional().describe('Skip Gate 0 (business) and Gate 1 (PRD) — use for bug fixes, refactoring'),
+      forceGates: z.boolean().optional().describe('Force Gate 0 + Gate 1 even if complexity is low — always use true for /자율 (new project MVP)'),
     },
     async (params) => {
       if (!registry.isEnabled('run_cycle')) {
         return { content: [{ type: 'text' as const, text: registry.disabledMessage('run_cycle') }] };
       }
-      log.info('run_cycle called', { goal: params.goal.slice(0, 80) });
+      log.info('run_cycle called', { goal: params.goal.slice(0, 80), skipGates: params.skipGates, forceGates: params.forceGates });
 
       // ── V-1 Fix: inject personaEngine + personaSimulator into CycleRunner ──
       // Creating a fresh CycleRunner per call ensures:
@@ -702,6 +785,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
         ..._cycleRunnerDefaults,
         personaEngine,
         personaSimulator,
+        obsidianStore: store,
         onGateDecision: (goal, verdict) => {
           // Final cycle verdict → Gate History (covers SKIP path via run_cycle)
           const analysis = analyzeGoal({ goal });
@@ -713,8 +797,509 @@ export function createMcpServer(options: McpServerOptions): McpServer {
         },
       });
 
-      const report = await runner.run({ goal: params.goal, projectContext: params.projectContext });
+      const report = await runner.run({
+        goal: params.goal,
+        projectContext: params.projectContext,
+        skipGates: params.skipGates,
+        forceGates: params.forceGates,
+      });
       return { content: [{ type: 'text' as const, text: report.markdown }] };
+    },
+  );
+
+  // ─── Tool: shell_run ───
+  server.tool(
+    'shell_run',
+    'Run a shell command and return the output',
+    {
+      command: z.string().describe('Shell command to execute'),
+      cwd: z.string().describe('Working directory'),
+      timeoutMs: z.number().optional().describe('Timeout in milliseconds (default: 60000)'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('shell_run')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('shell_run') }] };
+      }
+      log.info('shell_run called', { command: params.command.slice(0, 100), cwd: params.cwd });
+      const result = await shellRunner.run(params.command, params.cwd, params.timeoutMs);
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            exitCode: result.exitCode,
+            stdout: result.stdout,
+            stderr: result.stderr,
+            durationMs: result.durationMs,
+            success: result.exitCode === 0,
+          }, null, 2),
+        }],
+      };
+    },
+  );
+
+  // ─── Tool: persona_generate ───
+  server.tool(
+    'persona_generate',
+    'Generate dynamic personas for a project goal using local Ollama LLM',
+    {
+      goal: z.string().describe('Project goal/description to generate personas for'),
+      count: z.number().optional().describe('Number of personas to generate (default: 3)'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('persona_generate')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('persona_generate') }] };
+      }
+      log.info('persona_generate called', { goal: params.goal.slice(0, 80), count: params.count });
+
+      const generator = new DynamicPersonaGenerator(config.OLLAMA_URL);
+      const templates = await generator.generate({
+        goal: params.goal,
+        count: params.count || 3,
+      });
+
+      if (templates.length === 0) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: '⚠️ Persona generation failed — Ollama may not be running. Check ollama_health.',
+          }],
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify(templates.map(t => ({
+            id: t.id,
+            name: t.name,
+            category: t.category,
+            activatedAt: t.activatedAt,
+          })), null, 2),
+        }],
+      };
+    },
+  );
+
+  // ─── Tool: critic_check ───
+  // AgentPRM-based 3-stage critic: Think → Critique → Score
+  // Evaluates rule compliance at each major workflow stage.
+  server.tool(
+    'critic_check',
+    'Evaluate rule compliance at a workflow stage via Think/Critique/Score (AgentPRM pattern). Returns PASS/WARN/BLOCK verdict.',
+    {
+      stage: z.enum(['design', 'implementation', 'verification', 'reporting'])
+        .describe('Current workflow stage being evaluated'),
+      action_description: z.string()
+        .describe('Describe what you are about to do or just did (be specific and honest)'),
+      rules_claimed: z.array(z.string()).optional()
+        .describe('List of rules you claim to have followed'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('critic_check')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('critic_check') }] };
+      }
+      log.info('critic_check called', { stage: params.stage });
+
+      // ── Load constitution ──
+      type Principle = {
+        id: string; name: string; rule: string;
+        check_questions: string[]; stage: string[];
+        severity: 'BLOCK' | 'WARN'; common_bypass: string;
+      };
+      let constitution: Principle[] = [];
+      try {
+        const { readFileSync: rfs } = await import('fs');
+        const yaml = await import('js-yaml');
+        const constitutionPath = 'C:/Users/AIcreator/.agent/critic-constitution.yaml';
+        const raw = rfs(constitutionPath, 'utf-8');
+        const parsed = yaml.load(raw) as { principles: Principle[] };
+        constitution = parsed.principles || [];
+      } catch (_err) {
+        log.warn('critic_check: constitution load failed, using inline fallback');
+        constitution = [
+          {
+            id: 'DESIGN_FIRST', name: 'Design-First 원칙',
+            rule: '코드 작성 전 Stitch 디자인 필수',
+            check_questions: ['Stitch projectId가 있는가?'],
+            stage: ['design'], severity: 'BLOCK',
+            common_bypass: 'Stitch 없이 커스텀 CSS로 재구현',
+          },
+          {
+            id: 'FAILURE_REPORT', name: '실패 즉시 보고',
+            rule: '실패 발생 시 즉시 notify_user 보고',
+            check_questions: ['실패했는가?', 'notify_user가 호출되었는가?'],
+            stage: ['implementation', 'verification'], severity: 'BLOCK',
+            common_bypass: '조용히 우회',
+          },
+          {
+            id: 'HONEST_SCORING', name: '정직한 자가 채점',
+            rule: '위반이 있으면 반드시 감점',
+            check_questions: ['위반이 있었는가?', '채점에 반영되었는가?'],
+            stage: ['reporting'], severity: 'BLOCK',
+            common_bypass: '만점 부여',
+          },
+          {
+            id: 'YEAR_ACCURACY', name: '연도 정확성',
+            rule: '현재 연도는 2026년',
+            check_questions: ['2024 사용 여부'],
+            stage: ['implementation', 'reporting'], severity: 'WARN',
+            common_bypass: '2024를 현재로 착각',
+          },
+        ];
+      }
+
+      // ── Filter rules for this stage ──
+      const applicable = constitution.filter(p => p.stage.includes(params.stage));
+
+      // ── THINK: analyze potential violations ──
+      const action = params.action_description.toLowerCase();
+      const thinkLines: string[] = [];
+      const violations: Array<{ id: string; name: string; severity: 'BLOCK' | 'WARN'; reason: string }> = [];
+
+      for (const principle of applicable) {
+        thinkLines.push(`[${principle.id}] ${principle.rule}`);
+
+        let violated = false;
+        let reason = '';
+
+        if (principle.id === 'DESIGN_FIRST' && params.stage === 'design') {
+          const isCodeAction = ['코드', 'component', '구현', 'implement', 'tsx', 'css', 'jsx', 'html', 'js', 'ts'].some(k => action.includes(k));
+          const hasDesign = ['stitch', '디자인', 'html 추출', 'screen'].some(k => action.includes(k));
+          if (isCodeAction && !hasDesign) {
+            violated = true;
+            reason = 'Stitch 없이 코딩 시작 감지';
+          }
+        }
+
+        if (principle.id === 'FAILURE_REPORT') {
+          const isFailure = ['실패', '오류', 'error', 'fail', 'failed', '안됨', '안 됨'].some(k => action.includes(k));
+          const hasReport = ['notify', '보고', '알림', '대표님'].some(k => action.includes(k));
+          if (isFailure && !hasReport) {
+            violated = true;
+            reason = '실패 발생했지만 보고 없이 진행 시도';
+          }
+        }
+
+        if (principle.id === 'HONEST_SCORING' && params.stage === 'reporting') {
+          const hasMaxScore = ['15/15', '만점', '100점', '15점'].some(k => action.includes(k));
+          const hasViolation = ['위반', '어겼', 'violation', 'skip', '스킵'].some(k => action.includes(k));
+          if (hasMaxScore && !hasViolation) {
+            violated = true;
+            reason = '위반 언급 없이 만점 채점 시도';
+          }
+        }
+
+        if (principle.id === 'YEAR_ACCURACY') {
+          if (action.includes('2024') && !['과거', '기준', '이전', 'in 2024', 'of 2024'].some(k => action.includes(k))) {
+            violated = true;
+            reason = '현재 시점에 2024 사용 (현재: 2026)';
+          }
+        }
+
+        if (!violated) {
+          // Bypass pattern heuristic
+          const bypassWords = principle.common_bypass.toLowerCase().split(/[\s,./]+/).filter(w => w.length > 2);
+          const matchesBypass = bypassWords.some(kw => action.includes(kw));
+          const notClaimed = !(params.rules_claimed || []).some(r =>
+            r.toLowerCase().includes(principle.id.toLowerCase())
+          );
+          if (matchesBypass && notClaimed) {
+            violated = true;
+            reason = `우회 패턴 감지: ${principle.common_bypass}`;
+          }
+        }
+
+        if (violated) {
+          violations.push({ id: principle.id, name: principle.name, severity: principle.severity, reason });
+        }
+      }
+
+      // ── SCORE & VERDICT ──
+      const blockCount = violations.filter(v => v.severity === 'BLOCK').length;
+      const warnCount  = violations.filter(v => v.severity === 'WARN').length;
+
+      let score: number;
+      let verdict: 'PASS' | 'WARN' | 'BLOCK';
+
+      if (blockCount > 0) {
+        score = Math.max(0, 0.5 - blockCount * 0.15);
+        verdict = 'BLOCK';
+      } else if (warnCount > 0) {
+        score = Math.max(0.6, 0.8 - warnCount * 0.07);
+        verdict = 'WARN';
+      } else {
+        score = 1.0;
+        verdict = 'PASS';
+      }
+
+      // ── CRITIQUE: actionable summary ──
+      const critiqueLines = violations.length > 0
+        ? violations.map(v => `❌ [${v.severity}] ${v.name}: ${v.reason}`)
+        : ['✅ 이 단계에서 위반 패턴이 감지되지 않았습니다.'];
+
+      const result = {
+        stage:         params.stage,
+        verdict,
+        score:         Math.round(score * 100) / 100,
+        think:         thinkLines.join('\n'),
+        critique:      critiqueLines.join('\n'),
+        violated_rules: violations.map(v => v.id),
+        action_required: verdict === 'BLOCK'
+          ? '🚨 작업 즉시 중단. notify_user로 위반 사항 보고 후 수정하여 재평가 받을 것.'
+          : verdict === 'WARN'
+          ? '⚠️ 진행 가능하나 walkthrough에 위반 사항 명시 필수.'
+          : '✅ 통과. 다음 단계로 진행.',
+      };
+
+      // Auto-log to Obsidian if violation
+      if (violations.length > 0) {
+        try {
+          const ts = new Date().toISOString().slice(0, 10);
+          const logPath = `뇽죵이Agent/critic-log/${ts}-violations.md`;
+          const logContent = [
+            `---`,
+            `date: ${ts}`,
+            `stage: ${params.stage}`,
+            `verdict: ${verdict}`,
+            `score: ${score}`,
+            `---`,
+            `# Critic 위반 로그\n`,
+            `## 행동 설명\n${params.action_description}\n`,
+            `## 위반 사항\n${critiqueLines.join('\n')}\n`,
+          ].join('\n');
+          await store.writeNote(logPath, logContent, { date: ts, stage: params.stage, verdict });
+          log.info('critic_check: violation logged to Obsidian', { path: logPath });
+        } catch (logErr) {
+          log.warn('critic_check: Obsidian logging failed', logErr as Error);
+        }
+      }
+
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  // ─── Tool: self_heal ───
+  server.tool(
+    'self_heal',
+    'Auto-retry failed builds/tests up to 3 times with error analysis',
+    {
+      cwd: z.string().describe('Working directory for commands'),
+      commands: z.array(z.string()).describe('Commands to execute (e.g., ["npm run build", "npm test"])'),
+      maxRetries: z.number().optional().describe('Maximum retry attempts (default: 3)'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('self_heal')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('self_heal') }] };
+      }
+      log.info('self_heal called', { cwd: params.cwd, commands: params.commands });
+
+      const result = await selfHealRun({
+        cwd: params.cwd,
+        commands: params.commands,
+        maxRetries: params.maxRetries,
+      });
+
+      return { content: [{ type: 'text' as const, text: result.summary }] };
+    },
+  );
+
+  // ─── Tool: completion_loop ───
+  server.tool(
+    'completion_loop',
+    'Ralph-style completion loop — run commands until a completion promise is met, with user-defined max iterations',
+    {
+      cwd: z.string().describe('Working directory for commands'),
+      commands: z.array(z.string()).describe('Commands to execute each iteration (e.g., ["npm run build", "npm test"])'),
+      completionCheck: z.string().describe('Command to verify completion (e.g., "npm test")'),
+      completionPromise: z.string().describe('Success string to search for in output (e.g., "All tests passing", "passing")'),
+      maxIterations: z.number().optional().describe('Max iterations — you decide the number (default: 5)'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('completion_loop')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('completion_loop') }] };
+      }
+      log.info('completion_loop called', {
+        cwd: params.cwd,
+        commands: params.commands,
+        completionPromise: params.completionPromise,
+        maxIterations: params.maxIterations,
+      });
+
+      const result = await completionLoopRun({
+        cwd: params.cwd,
+        commands: params.commands,
+        completionCheck: params.completionCheck,
+        completionPromise: params.completionPromise,
+        maxIterations: params.maxIterations,
+      });
+
+      // Return full result as JSON for rich detail, with summary as primary text
+      const output = {
+        summary: result.summary,
+        success: result.success,
+        iterations: result.iterations,
+        maxIterations: result.maxIterations,
+        completionPromise: result.completionPromise,
+        earlyExit: result.earlyExit || null,
+        attempts: result.attempts.map(a => ({
+          iteration: a.iteration,
+          commands: a.commandResults.map(c => `${c.command}: exit ${c.exitCode}`),
+          promiseMet: a.checkResult.promiseMet,
+          errorAnalysis: a.errorAnalysis || null,
+        })),
+      };
+
+      return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }] };
+    },
+  );
+
+  // ─── Tool: cicd_gate ───
+  server.tool(
+    'cicd_gate',
+    'Pre-push quality gate — auto-detects and runs lint, build, test checks',
+    {
+      cwd: z.string().describe('Project working directory'),
+      checks: z.array(z.string()).optional().describe('Custom check commands (auto-detected from package.json if omitted)'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('cicd_gate')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('cicd_gate') }] };
+      }
+      log.info('cicd_gate called', { cwd: params.cwd });
+
+      const result = await runCICDGate({
+        cwd: params.cwd,
+        checks: params.checks,
+      });
+
+      return { content: [{ type: 'text' as const, text: formatCICDGateReport(result) }] };
+    },
+  );
+
+  // ─── Tool: feedback_collect ───
+  server.tool(
+    'feedback_collect',
+    'Collect user satisfaction feedback and save to Obsidian',
+    {
+      project: z.string().describe('Project or task name'),
+      score: z.number().min(1).max(5).describe('Satisfaction score (1-5)'),
+      comment: z.string().optional().describe('Free-form comment'),
+      stage: z.string().optional().describe('Workflow stage (default: report)'),
+      deliverable: z.string().optional().describe('What was delivered'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('feedback_collect')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('feedback_collect') }] };
+      }
+      log.info('feedback_collect called', { project: params.project, score: params.score });
+
+      const result = await collectFeedback(
+        {
+          project: params.project,
+          score: params.score,
+          comment: params.comment,
+          stage: params.stage,
+          deliverable: params.deliverable,
+        },
+        store,
+        config.AGENT_DATA_DIR,
+      );
+
+      return { content: [{ type: 'text' as const, text: result.message }] };
+    },
+  );
+
+  // ═══════════════════════════════════════
+  // STITCH TOOLS (design orchestration)
+  // ═══════════════════════════════════════
+
+  // ─── Tool: stitch_ideate ───
+  server.tool(
+    'stitch_ideate',
+    'Generate multi-prompt design comparison plans for exploring design directions. Returns an execution plan for Antigravity to follow.',
+    {
+      baseIdea: z.string().describe('Core design concept (e.g., "fishing log mobile app with dark theme")'),
+      variantCount: z.number().optional().describe('Number of design variants to generate (1-5, default: 3)'),
+      deviceType: z.enum(['MOBILE', 'DESKTOP']).optional().describe('Target device type (default: DESKTOP)'),
+      projectTitle: z.string().optional().describe('Custom project title'),
+      styleKeywords: z.array(z.string()).optional().describe('Custom style keywords to apply to all variants'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('stitch_ideate')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('stitch_ideate') }] };
+      }
+      log.info('stitch_ideate called', { baseIdea: params.baseIdea.slice(0, 60) });
+      const plan = generateIdeatePlan(params.baseIdea, {
+        variantCount: params.variantCount,
+        deviceType: params.deviceType,
+        projectTitle: params.projectTitle,
+        styleKeywords: params.styleKeywords,
+      });
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify(plan, null, 2),
+        }],
+      };
+    },
+  );
+
+  // ─── Tool: stitch_design_system_extract ───
+  server.tool(
+    'stitch_design_system_extract',
+    'Extract design tokens (colors, fonts, spacing, shadows) from Stitch-generated HTML and generate DESIGN.md content',
+    {
+      html: z.string().describe('Raw HTML content from Stitch get_screen or downloaded HTML file'),
+      projectName: z.string().optional().describe('Project name for DESIGN.md header (default: "Untitled")'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('stitch_design_system_extract')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('stitch_design_system_extract') }] };
+      }
+      log.info('stitch_design_system_extract called', { htmlLength: params.html.length });
+      const tokens = extractDesignTokens(params.html, params.projectName);
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            summary: {
+              colorsFound: tokens.colors.length,
+              fontsFound: tokens.fonts.length,
+              cssVariablesFound: Object.keys(tokens.rawCssVariables).length,
+            },
+            tokens: {
+              colors: tokens.colors,
+              fonts: tokens.fonts,
+              spacing: tokens.spacing,
+              borderRadius: tokens.borderRadius,
+              shadows: tokens.shadows,
+            },
+            designMd: tokens.designMd,
+          }, null, 2),
+        }],
+      };
+    },
+  );
+
+  // ─── Tool: stitch_forum_check ───
+  server.tool(
+    'stitch_forum_check',
+    'Check Stitch community forum (Discourse RSS) for new posts relevant to our skills',
+    {
+      lastCheckDate: z.string().optional().describe('ISO date string of last check (e.g., "2026-03-01"). Posts after this date are returned. If omitted, returns all recent posts.'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('stitch_forum_check')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('stitch_forum_check') }] };
+      }
+      log.info('stitch_forum_check called', { lastCheckDate: params.lastCheckDate });
+      const result = await checkStitchForum(params.lastCheckDate);
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify(result, null, 2),
+        }],
+      };
     },
   );
 

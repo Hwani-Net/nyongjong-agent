@@ -2,6 +2,56 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-03-03
+
+### 🎨 Stitch Design Orchestration Tools
+
+**246/246 unit tests (19 files), 0 defects**
+
+### Added
+- **`stitch_ideate`** — multi-prompt design comparison plan generator
+  - Generates N design variants (1-5) with diverse style directions (Minimalist, Bold, Dark, Warm, Editorial)
+  - Returns execution plan for Antigravity to follow (does NOT call Stitch MCP directly)
+  - Auto-selects model: first variant uses `GEMINI_3_PRO`, rest use `GEMINI_3_FLASH`
+- **`stitch_design_system_extract`** — HTML→design token extractor
+  - Parses Stitch-generated HTML for colors (hex/rgb/hsl), fonts, spacing, border-radius, shadows
+  - Normalizes colors to hex, suggests roles (primary/secondary/accent/background/text)
+  - Generates complete `DESIGN.md` markdown content automatically
+- **`stitch_forum_check`** — Discourse RSS monitor for Stitch community
+  - Parses `discuss.ai.google.dev/c/stitch/61.rss` for new posts
+  - Classifies posts by skill-relevant keywords (MCP, design system, API, new feature, etc.)
+  - Returns recommendation on whether skill updates are needed
+- **`docs/PROJECT_CONTEXT.md`** — project north-star and progress tracker created
+- **`src/stitch/` module** — 3 new TypeScript modules (522 lines total)
+
+### Changed
+- MCP tools count: 28 → **31** (added 3 Stitch tools)
+- `mcp-server.ts` — `stitch` tool group registered in ToolRegistry
+- Version bump: 0.5.1 → **0.6.0**
+
+## [0.5.1] - 2026-03-02
+
+### 🔗 Git Worktree Wiring + Documentation Overhaul
+
+**246/246 unit tests (19 files), 0 defects**
+
+### Added
+- **Git Worktree → CycleRunner integration** — all tasks run in isolated `task/{slug}` branches
+  - Success → auto-merge to main + cleanup
+  - Failure → branch preserved for inspection, worktree removed
+- **Claw Empire visual bridge** — `claw-bridge.ts` pushes stage changes to Claw office UI in real-time
+- **3-Tier review workflows** — 5 slash commands (`/수정`, `/디자인`, `/기능`, `/분석`, `/자율`) now enforce Phase 1-5 review chain
+
+### Changed
+- `agent.ts` — `gitWorktree` instance now injected into CycleRunner
+- MCP tools count: 25 → **28** (added `persona_generate` removed, corrected registry count)
+- README.md — complete rewrite with accurate stats, Project Structure, domain personas table
+- CHANGELOG.md — added this entry
+
+### Fixed
+- README listed outdated test count (169 → 246), MCP count (25 → 28), missing files in structure
+- Claw-Empire comparison analysis corrected (3 false negatives identified and fixed)
+
 ## [0.5.0] - 2026-02-27
 
 ### 🔥 Stage-Gate Workflow + Dashboard Health Checks
