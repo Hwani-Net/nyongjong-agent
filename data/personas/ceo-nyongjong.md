@@ -1,8 +1,8 @@
 ---
-id: ceo-naedon
-name: 내돈내산 대표
+id: ceo-nyongjong
+name: 뇽죵이 대표
 category: business
-era: 2024
+era: 2026
 activated_at:
   - understand
   - report
