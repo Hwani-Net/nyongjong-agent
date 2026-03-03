@@ -4,3 +4,10 @@ dist/
 *.log
 coverage/
 .vitest/
+
+# Temp files
+temp_test.html
+stitch.html
+html_rendered.png
+stitch_screenshot.png
+vitest-result.json
