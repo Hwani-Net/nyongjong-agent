@@ -206,4 +206,100 @@ export class SkillLifecycleManager {
       report: lines.join('\n'),
     };
   }
+
+  // ─── Retirement Actions ───
+
+  /**
+   * Check if a SKILL.md content has `retired: true` in frontmatter.
+   */
+  static isRetired(skillMdContent: string): boolean {
+    const fmMatch = skillMdContent.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (!fmMatch) return false;
+    return /^retired:\s*true\s*$/m.test(fmMatch[1]);
+  }
+
+  /**
+   * Retire a skill by adding `retired: true` to its SKILL.md frontmatter.
+   * Returns the modified SKILL.md content.
+   */
+  static retireSkillContent(skillMdContent: string): string {
+    if (SkillLifecycleManager.isRetired(skillMdContent)) {
+      return skillMdContent; // Already retired
+    }
+
+    const fmMatch = skillMdContent.match(/^(---\r?\n)([\s\S]*?)(\r?\n---)/);
+    if (!fmMatch) {
+      // No frontmatter — add one
+      return `---\nretired: true\n---\n${skillMdContent}`;
+    }
+
+    // Insert retired: true before closing ---
+    const [, open, body, close] = fmMatch;
+    const newBody = body.trimEnd() + '\nretired: true';
+    return skillMdContent.replace(fmMatch[0], `${open}${newBody}${close}`);
+  }
+
+  /**
+   * Reactivate a retired skill by removing `retired: true` from frontmatter.
+   * Returns the modified SKILL.md content.
+   */
+  static reactivateSkillContent(skillMdContent: string): string {
+    if (!SkillLifecycleManager.isRetired(skillMdContent)) {
+      return skillMdContent; // Not retired
+    }
+
+    // Remove the retired: true line
+    return skillMdContent.replace(/^retired:\s*true\s*\r?\n?/m, '');
+  }
+
+  /**
+   * Retire a skill on disk. Reads SKILL.md, adds retired: true, writes back.
+   */
+  async retireSkillOnDisk(skillName: string): Promise<{ success: boolean; message: string }> {
+    const { readFile, writeFile } = await import('fs/promises');
+    const { resolve } = await import('path');
+    const { homedir } = await import('os');
+
+    const agentRoot = process.env['AGENT_ROOT'] || homedir();
+    const skillMdPath = resolve(agentRoot, '.agent', 'skills', skillName, 'SKILL.md');
+
+    try {
+      const content = await readFile(skillMdPath, 'utf-8');
+      if (SkillLifecycleManager.isRetired(content)) {
+        return { success: true, message: `${skillName}은 이미 은퇴 상태입니다.` };
+      }
+      const newContent = SkillLifecycleManager.retireSkillContent(content);
+      await writeFile(skillMdPath, newContent, 'utf-8');
+      log.info(`Skill retired: ${skillName}`);
+      return { success: true, message: `✅ ${skillName} 은퇴 처리 완료. SKILL.md에 retired: true 추가됨.` };
+    } catch (err) {
+      return { success: false, message: `❌ 은퇴 실패: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
+  /**
+   * Reactivate a retired skill on disk.
+   */
+  async reactivateSkillOnDisk(skillName: string): Promise<{ success: boolean; message: string }> {
+    const { readFile, writeFile } = await import('fs/promises');
+    const { resolve } = await import('path');
+    const { homedir } = await import('os');
+
+    const agentRoot = process.env['AGENT_ROOT'] || homedir();
+    const skillMdPath = resolve(agentRoot, '.agent', 'skills', skillName, 'SKILL.md');
+
+    try {
+      const content = await readFile(skillMdPath, 'utf-8');
+      if (!SkillLifecycleManager.isRetired(content)) {
+        return { success: true, message: `${skillName}은 활성 상태입니다 (은퇴 아님).` };
+      }
+      const newContent = SkillLifecycleManager.reactivateSkillContent(content);
+      await writeFile(skillMdPath, newContent, 'utf-8');
+      log.info(`Skill reactivated: ${skillName}`);
+      return { success: true, message: `♻️ ${skillName} 재활성화 완료. retired 플래그 제거됨.` };
+    } catch (err) {
+      return { success: false, message: `❌ 재활성화 실패: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
 }
+

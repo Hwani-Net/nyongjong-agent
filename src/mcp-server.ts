@@ -1368,10 +1368,10 @@ export function createMcpServer(options: McpServerOptions): McpServer {
   // ─── Tool: skill_benchmark ───
   server.tool(
     'skill_benchmark',
-    'A/B benchmark: compare skill effectiveness with metrics (tokens, speed, success rate)',
+    'A/B benchmark: compare skill effectiveness with metrics, eval framework, retirement',
     {
-      action: z.enum(['start_baseline', 'end_with_skill', 'get_stats', 'summary', 'flush', 'flush_all']).describe('Benchmark action'),
-      skillName: z.string().optional().describe('Skill name (required for start_baseline, end_with_skill, get_stats, flush)'),
+      action: z.enum(['start_baseline', 'end_with_skill', 'get_stats', 'summary', 'flush', 'flush_all', 'run_eval', 'scan_evals', 'retire', 'reactivate']).describe('Benchmark action'),
+      skillName: z.string().optional().describe('Skill name (required for most actions)'),
       sessionId: z.string().optional().describe('Session ID from start_baseline (required for end_with_skill)'),
       tokens: z.number().optional().describe('Token count for this measurement'),
       durationMs: z.number().optional().describe('Duration in milliseconds'),
@@ -1473,8 +1473,46 @@ export function createMcpServer(options: McpServerOptions): McpServer {
           }
         }
 
+        case 'run_eval': {
+          if (!params.skillName) {
+            return { content: [{ type: 'text' as const, text: '❌ skillName is required for run_eval' }] };
+          }
+          const { runSkillEvalSuite } = await import('./core/skill-eval.js');
+          const evalSummary = await runSkillEvalSuite(params.skillName);
+          return { content: [{ type: 'text' as const, text: evalSummary.report }] };
+        }
+
+        case 'scan_evals': {
+          if (!params.skillName) {
+            return { content: [{ type: 'text' as const, text: '❌ skillName is required for scan_evals' }] };
+          }
+          const { scanSkillEvals } = await import('./core/skill-eval.js');
+          const evals = await scanSkillEvals(params.skillName);
+          if (evals.length === 0) {
+            return { content: [{ type: 'text' as const, text: `⚠️ "${params.skillName}"에 eval 정의가 없습니다. eval/ 폴더에 YAML 파일을 추가하세요.` }] };
+          }
+          const evalList = evals.map(e => `- **${e.name}**: ${e.prompt.slice(0, 60)}... (expected: ${e.expectedContains.join(', ')})`).join('\n');
+          return { content: [{ type: 'text' as const, text: `## 📋 ${params.skillName} Eval 목록 (${evals.length}개)\n\n${evalList}` }] };
+        }
+
+        case 'retire': {
+          if (!params.skillName) {
+            return { content: [{ type: 'text' as const, text: '❌ skillName is required for retire' }] };
+          }
+          const retireResult = await skillLifecycle.retireSkillOnDisk(params.skillName);
+          return { content: [{ type: 'text' as const, text: retireResult.message }] };
+        }
+
+        case 'reactivate': {
+          if (!params.skillName) {
+            return { content: [{ type: 'text' as const, text: '❌ skillName is required for reactivate' }] };
+          }
+          const reactivateResult = await skillLifecycle.reactivateSkillOnDisk(params.skillName);
+          return { content: [{ type: 'text' as const, text: reactivateResult.message }] };
+        }
+
         default:
-          return { content: [{ type: 'text' as const, text: '❌ Unknown action. Use: start_baseline, end_with_skill, get_stats, summary, flush, flush_all' }] };
+          return { content: [{ type: 'text' as const, text: '❌ Unknown action. Use: start_baseline, end_with_skill, get_stats, summary, flush, flush_all, run_eval, scan_evals, retire, reactivate' }] };
       }
     },
   );

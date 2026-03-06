@@ -446,6 +446,11 @@ body {
 .skill-card-name { font-size: 0.875rem; font-weight: 700; }
 .skill-card-desc { font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5; flex: 1; }
 .skill-card-meta { font-size: 0.6875rem; color: var(--text-secondary); display: flex; gap: 0.375rem; align-items: center; flex-wrap: wrap; }
+.skill-card-actions { display: flex; gap: 0.25rem; margin-top: 0.375rem; flex-wrap: wrap; }
+.skill-card-actions button { font-size: 0.6875rem; padding: 0.125rem 0.375rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-card); color: var(--text); cursor: pointer; transition: background 0.15s; }
+.skill-card-actions button:hover { background: var(--accent); color: #fff; }
+.skill-card-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+.skill-card.retired { opacity: 0.5; border-left: 3px solid #ef4444; }
 .badge-cap { background: var(--orange-light); color: var(--orange); }
 .badge-wf  { background: var(--blue-light);   color: var(--blue); }
 .badge-retire { background: var(--red-light);  color: var(--red); }
@@ -1710,13 +1715,55 @@ function renderSkillCards(skills) {
     }
     const lastUsed  = s.lastUsed ? new Date(s.lastUsed).toLocaleDateString('ko-KR') : '미사용';
     const usageText = s.useCount > 0 ? s.useCount + '회 사용' : '미사용';
-    return '<div class="skill-card fade-in">' +
+    return '<div class="skill-card fade-in' + (s.retireCandidate ? ' retired' : '') + '">' +
       '<div class="skill-card-name">' + s.name + '</div>' +
       '<div class="skill-card-desc">' + (s.description || '설명 없음') + '</div>' +
       '<div class="skill-card-meta">' + catBadge + retireBadge + verdictBadge + '</div>' +
       '<div class="skill-card-meta" style="margin-top:0.25rem">마지막: ' + lastUsed + ' · ' + usageText + '</div>' +
+      '<div class="skill-card-actions">' +
+        '<button onclick="runSkillEval(\'' + s.name + '\')" title="Eval ON/OFF 비교 실행">🧪 Eval</button>' +
+        '<button onclick="retireSkill(\'' + s.name + '\')" title="스킬 은퇴 처리">🔴 은퇴</button>' +
+        '<button onclick="reactivateSkill(\'' + s.name + '\')" title="은퇴 스킬 복구">♻️ 복구</button>' +
+      '</div>' +
     '</div>';
   }).join('');
+}
+
+async function runSkillEval(skillName) {
+  const btn = event.target; btn.disabled = true; btn.textContent = '⏳ 실행중...';
+  try {
+    const res = await fetch('/api/skills/' + encodeURIComponent(skillName) + '/eval', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      const emoji = data.overallVerdict === 'KEEP' ? '✅' : data.overallVerdict === 'RETIRE' ? '🔴' : '🟡';
+      alert(emoji + ' ' + skillName + ' Eval 결과: ' + data.overallVerdict +
+        '\\n\\nEval ' + data.totalEvals + '개 실행 완료' +
+        (data.retirementSignal ? '\\n\\n⚠️ 은퇴 신호: 모델이 이미 이 스킬의 능력을 흡수했습니다.' : ''));
+    } else {
+      alert('❌ Eval 실패: ' + (data.error || 'Unknown error'));
+    }
+  } catch (err) { alert('❌ 네트워크 오류: ' + err.message); }
+  btn.disabled = false; btn.textContent = '🧪 Eval';
+  refreshSkillsPage();
+}
+
+async function retireSkill(skillName) {
+  if (!confirm('정말 "' + skillName + '" 스킬을 은퇴시키겠습니까?\\nSKILL.md에 retired: true가 추가됩니다.')) return;
+  try {
+    const res = await fetch('/api/skills/' + encodeURIComponent(skillName) + '/retire', { method: 'POST' });
+    const data = await res.json();
+    alert(data.message);
+  } catch (err) { alert('❌ 오류: ' + err.message); }
+  refreshSkillsPage();
+}
+
+async function reactivateSkill(skillName) {
+  try {
+    const res = await fetch('/api/skills/' + encodeURIComponent(skillName) + '/reactivate', { method: 'POST' });
+    const data = await res.json();
+    alert(data.message);
+  } catch (err) { alert('❌ 오류: ' + err.message); }
+  refreshSkillsPage();
 }
 </script>
 </body>
@@ -1958,6 +2005,72 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: false, error: err instanceof Error ? err.message : String(err) }));
+      }
+      return;
+    }
+
+    // Skills 2.0 — run eval for a skill
+    const evalMatch = url?.match(/^\/api\/skills\/([^/]+)\/eval$/);
+    if (evalMatch && req.method === 'POST') {
+      const skillName = decodeURIComponent(evalMatch[1]);
+      try {
+        const { runSkillEvalSuite } = await import('../core/skill-eval.js');
+        const summary = await runSkillEvalSuite(skillName);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          ok: true,
+          skillName: summary.skillName,
+          totalEvals: summary.totalEvals,
+          overallVerdict: summary.overallVerdict,
+          retirementSignal: summary.retirementSignal,
+          comparisons: summary.comparisons.map(c => ({
+            evalName: c.evalName,
+            verdict: c.verdict,
+            reason: c.reason,
+            withSkillPassed: c.withSkillResult.passed,
+            withoutSkillPassed: c.withoutSkillResult.passed,
+            withSkillTokens: c.withSkillResult.tokens,
+            withoutSkillTokens: c.withoutSkillResult.tokens,
+          })),
+          report: summary.report,
+        }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: err instanceof Error ? err.message : String(err) }));
+      }
+      return;
+    }
+
+    // Skills 2.0 — retire a skill
+    const retireMatch = url?.match(/^\/api\/skills\/([^/]+)\/retire$/);
+    if (retireMatch && req.method === 'POST') {
+      const skillName = decodeURIComponent(retireMatch[1]);
+      try {
+        const { SkillLifecycleManager } = await import('../core/skill-lifecycle.js');
+        const manager = new SkillLifecycleManager();
+        const result = await manager.retireSkillOnDisk(skillName);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: err instanceof Error ? err.message : String(err) }));
+      }
+      return;
+    }
+
+    // Skills 2.0 — reactivate a retired skill
+    const reactivateMatch = url?.match(/^\/api\/skills\/([^/]+)\/reactivate$/);
+    if (reactivateMatch && req.method === 'POST') {
+      const skillName = decodeURIComponent(reactivateMatch[1]);
+      try {
+        const { SkillLifecycleManager } = await import('../core/skill-lifecycle.js');
+        const manager = new SkillLifecycleManager();
+        const result = await manager.reactivateSkillOnDisk(skillName);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: err instanceof Error ? err.message : String(err) }));
       }
       return;
     }
