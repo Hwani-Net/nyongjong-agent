@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.1] - 2026-03-06
+
+### 🔍 Skills 2.0 — Lifecycle Management + A/B Benchmarking
+
+**316/316 unit tests (24 files), 0 defects**
+
+Inspired by Claude Code Skills 2.0, this release adds skill lifecycle management
+and A/B benchmarking to the agent, enabling data-driven skill curation.
+
+### Added
+- **`skill_audit`** — scans `.agent/skills/` directory, classifies skills as capability/workflow, identifies retirement candidates
+  - Reads SKILL.md frontmatter `category: capability | workflow`
+  - Capability skills unused for N days → flagged for retirement
+  - Workflow skills persist indefinitely
+- **`skill_benchmark`** — A/B comparison engine for skill effectiveness
+  - `start_baseline` → record without-skill metrics
+  - `end_with_skill` → compare with-skill metrics
+  - Auto-verdict: **KEEP** (≥10% improvement) / **REVIEW** (mixed) / **RETIRE** (regression)
+  - Tracks success rate, token usage, duration
+- **`src/core/skill-lifecycle.ts`** — SkillLifecycleManager module (frontmatter parsing, usage tracking, audit reports)
+- **`src/core/skill-benchmark.ts`** — SkillBenchmark engine (A/B sessions, metrics computation, verdict logic)
+- **`shared-state.ts`** — SkillUsageEntry ring buffer (max 200 entries)
+- **52 SKILL.md files** — `category: capability | workflow` frontmatter tag added to all skills
+  - ⚡ Capability: 15 skills (image-converter, exchange-rate, etc.)
+  - 🔧 Workflow: 37 skills (devil-coding, pentagonal-audit, etc.)
+
+### Changed
+- MCP tools count: 31 → **33** (added `skill_audit`, `skill_benchmark` in `lifecycle` group)
+- Unit tests: 287 → **316** (+29 new tests in 2 files)
+- Version bump: 0.7.0 → **0.7.1**
+
 ## [0.6.0] - 2026-03-03
 
 ### 🎨 Stitch Design Orchestration Tools

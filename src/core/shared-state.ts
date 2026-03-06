@@ -79,3 +79,42 @@ export function setLastPRD(state: LastPRDState): void {
 export function getLastPRD(): LastPRDState | null {
   return lastPRD;
 }
+
+// ── Skill Usage Metrics ──────────────────────────────────────────────────────
+
+export interface SkillUsageEntry {
+  skillName: string;
+  category: 'capability' | 'workflow';
+  tokens: number;
+  durationMs: number;
+  success: boolean;
+  ts: number;
+}
+
+const SKILL_USAGE_MAX = 200;
+const skillUsageHistory: SkillUsageEntry[] = [];
+
+/**
+ * Record a skill usage event. Keeps newest first (max 200).
+ */
+export function recordSkillUsage(entry: Omit<SkillUsageEntry, 'ts'>): void {
+  skillUsageHistory.unshift({
+    ...entry,
+    ts: Date.now(),
+  });
+  if (skillUsageHistory.length > SKILL_USAGE_MAX) skillUsageHistory.pop();
+}
+
+/**
+ * Get the full skill usage history (read-only copy).
+ */
+export function getSkillUsageHistory(): SkillUsageEntry[] {
+  return [...skillUsageHistory];
+}
+
+/**
+ * Clear skill usage history — primarily for test isolation.
+ */
+export function clearSkillUsageHistory(): void {
+  skillUsageHistory.length = 0;
+}

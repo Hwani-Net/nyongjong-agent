@@ -27,6 +27,8 @@ import { extractDesignTokens } from './stitch/stitch-design-system.js';
 import { checkStitchForum } from './stitch/stitch-forum.js';
 import { createLogger } from './utils/logger.js';
 import { recordGateDecision, setLastGate, setLastPRD } from './core/shared-state.js';
+import { SkillLifecycleManager, parseFrontmatter } from './core/skill-lifecycle.js';
+import { SkillBenchmark } from './core/skill-benchmark.js';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { readFileSync } from 'fs';
@@ -125,6 +127,10 @@ export function createMcpServer(options: McpServerOptions): McpServer {
   registry.register('stitch_ideate', 'stitch', 'Generate multi-prompt design comparison plans');
   registry.register('stitch_design_system_extract', 'stitch', 'Extract design tokens from Stitch HTML');
   registry.register('stitch_forum_check', 'stitch', 'Check Stitch forum for new posts via RSS');
+
+  // Group: "lifecycle" — Skill lifecycle management (Skills 2.0)
+  registry.register('skill_audit', 'lifecycle', 'Scan skills and generate lifecycle audit report');
+  registry.register('skill_benchmark', 'lifecycle', 'A/B benchmark comparison for skill effectiveness');
 
   // Initialize core modules
   const store = new ObsidianStore({ apiKey: config.OBSIDIAN_API_KEY, apiUrl: config.OBSIDIAN_API_URL });
@@ -1302,6 +1308,130 @@ export function createMcpServer(options: McpServerOptions): McpServer {
           text: JSON.stringify(result, null, 2),
         }],
       };
+    },
+  );
+
+  // ─── Skill Lifecycle Tools (Skills 2.0) ───
+  const skillLifecycle = new SkillLifecycleManager();
+  const skillBenchmarkEngine = new SkillBenchmark();
+
+  // ─── Tool: skill_audit ───
+  server.tool(
+    'skill_audit',
+    'Scan installed skills, classify as capability/workflow, and identify retirement candidates',
+    {
+      skillsDir: z.string().optional().describe('Absolute path to skills directory (default: C:/Users/AIcreator/.agent/skills)'),
+      daysThreshold: z.number().optional().describe('Days of inactivity to flag capability skills for retirement (default: 30)'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('skill_audit')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('skill_audit') }] };
+      }
+      log.info('skill_audit called', params);
+
+      const skillsDir = params.skillsDir || 'C:/Users/AIcreator/.agent/skills';
+      const threshold = params.daysThreshold || 30;
+
+      try {
+        // Scan skills directory
+        const { readdirSync, readFileSync: readFs } = await import('fs');
+        const { join } = await import('path');
+        const entries = readdirSync(skillsDir, { withFileTypes: true });
+        const skillData: Array<{ name: string; description: string; category: 'capability' | 'workflow' }> = [];
+
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          const skillMdPath = join(skillsDir, entry.name, 'SKILL.md');
+          try {
+            const content = readFs(skillMdPath, 'utf-8');
+            const parsed = parseFrontmatter(content);
+            skillData.push({
+              name: parsed.name || entry.name,
+              description: parsed.description,
+              category: parsed.category,
+            });
+          } catch {
+            // Skip dirs without SKILL.md
+          }
+        }
+
+        skillLifecycle.registerSkills(skillData);
+        const auditReport = skillLifecycle.generateAuditReport(threshold);
+
+        return { content: [{ type: 'text' as const, text: auditReport.report }] };
+      } catch (err) {
+        return { content: [{ type: 'text' as const, text: `❌ Skill audit failed: ${String(err)}` }] };
+      }
+    },
+  );
+
+  // ─── Tool: skill_benchmark ───
+  server.tool(
+    'skill_benchmark',
+    'A/B benchmark: compare skill effectiveness with metrics (tokens, speed, success rate)',
+    {
+      action: z.enum(['start_baseline', 'end_with_skill', 'get_stats', 'summary']).describe('Benchmark action'),
+      skillName: z.string().optional().describe('Skill name (required for start_baseline, end_with_skill, get_stats)'),
+      sessionId: z.string().optional().describe('Session ID from start_baseline (required for end_with_skill)'),
+      tokens: z.number().optional().describe('Token count for this measurement'),
+      durationMs: z.number().optional().describe('Duration in milliseconds'),
+      success: z.boolean().optional().describe('Whether the task succeeded'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('skill_benchmark')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('skill_benchmark') }] };
+      }
+      log.info('skill_benchmark called', params);
+
+      switch (params.action) {
+        case 'start_baseline': {
+          if (!params.skillName) {
+            return { content: [{ type: 'text' as const, text: '❌ skillName is required for start_baseline' }] };
+          }
+          const sessionId = skillBenchmarkEngine.startBaseline(
+            params.skillName,
+            params.tokens || 0,
+            params.durationMs || 0,
+            params.success ?? true,
+          );
+          return { content: [{ type: 'text' as const, text: `✅ Baseline recorded. Session ID: ${sessionId}\nNow run the task WITH the skill, then call end_with_skill.` }] };
+        }
+
+        case 'end_with_skill': {
+          if (!params.sessionId) {
+            return { content: [{ type: 'text' as const, text: '❌ sessionId is required for end_with_skill' }] };
+          }
+          const result = skillBenchmarkEngine.endWithSkill(
+            params.sessionId,
+            params.tokens || 0,
+            params.durationMs || 0,
+            params.success ?? true,
+          );
+          if (!result) {
+            return { content: [{ type: 'text' as const, text: '❌ Session not found or already completed' }] };
+          }
+          return { content: [{ type: 'text' as const, text: result.report }] };
+        }
+
+        case 'get_stats': {
+          if (!params.skillName) {
+            return { content: [{ type: 'text' as const, text: '❌ skillName is required for get_stats' }] };
+          }
+          const stats = skillBenchmarkEngine.getSkillStats(params.skillName);
+          if (!stats) {
+            return { content: [{ type: 'text' as const, text: `아직 "${params.skillName}"에 대한 벤치마크 데이터가 없습니다.` }] };
+          }
+          return { content: [{ type: 'text' as const, text: stats.report }] };
+        }
+
+        case 'summary': {
+          const summary = skillBenchmarkEngine.generateSummaryReport();
+          return { content: [{ type: 'text' as const, text: summary }] };
+        }
+
+        default:
+          return { content: [{ type: 'text' as const, text: '❌ Unknown action. Use: start_baseline, end_with_skill, get_stats, summary' }] };
+      }
     },
   );
 

@@ -60,6 +60,7 @@ src/
 - [ ] npm Token 갱신 필요일: **2026-06-02** (Granular Token 90일 만료)
 - [ ] Dashboard Stitch 페이지에 라이브 데이터 연동 (실시간 포럼 모니터링)
 - [ ] GEMINI.md 다이어트 (572줄 → 축소)
+- [x] MCP → 스킬 마이그레이션 (2026-03-04): `perplexity-ask` → disabled (tavily 대체), `agentation` → disabled (온디맨드), `brave-search` → 설정 제거
 
 ## 🔧 ADR (Architecture Decision Records)
 
