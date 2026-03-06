@@ -879,7 +879,10 @@ body {
               <span id="skillsHealthBadge" class="badge badge-green">⚡ Skills 2.0</span>
               <span id="skillsLastUpdate" style="font-size:0.75rem;color:var(--text-secondary)">로딩 중...</span>
             </div>
-            <button class="btn" onclick="refreshSkills()">🔄 새로고침</button>
+            <div style="display:flex;gap:0.5rem">
+              <button class="btn" onclick="refreshSkills()">🔄 새로고침</button>
+              <button class="btn" style="background:var(--surface-2);border:1px solid var(--border)" onclick="seedDemoData()">🧪 테스트 데이터</button>
+            </div>
           </div>
 
           <!-- KPI 카드 4개 -->
@@ -1531,6 +1534,21 @@ let _retireCandidates = [];
 let _benchmarkResults = [];
 let _currentSkillTab = 'all';
 
+async function seedDemoData() {
+  try {
+    const btn = event.target;
+    btn.textContent = '⏳ 로딩...';
+    btn.disabled = true;
+    await fetch('/api/skills/seed-demo', { method: 'POST' });
+    await refreshSkills();
+    btn.textContent = '✅ 완료';
+    setTimeout(() => { btn.textContent = '🧪 테스트 데이터'; btn.disabled = false; }, 1500);
+  } catch(e) {
+    console.error('seed-demo failed', e);
+    if (event.target) { event.target.textContent = '🧪 테스트 데이터'; event.target.disabled = false; }
+  }
+}
+
 async function refreshSkills() {
   document.getElementById('skillsLastUpdate').textContent = '갱신 중...';
   try {
@@ -1851,6 +1869,35 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
       return;
     }
 
+    // Skills 2.0 — seed demo benchmark data
+    if (url === '/api/skills/seed-demo' && req.method === 'POST') {
+      type SampleCategory = 'capability' | 'workflow';
+      const samples: Array<{
+        name: string; desc: string; category: SampleCategory;
+        baseT: number; baseD: number; baseOk: boolean;
+        withT: number; withD: number; withOk: boolean;
+      }> = [
+        { name: 'pentagonal-audit',       desc: '5-axis quality gate audit',          category: 'workflow',   baseT: 2000, baseD: 3200, baseOk: false, withT: 1350, withD: 2100, withOk: true  },
+        { name: 'stitch-pencil-pipeline', desc: 'Stitch design-to-code pipeline',     category: 'workflow',   baseT: 3100, baseD: 4500, baseOk: true,  withT: 2000, withD: 3000, withOk: true  },
+        { name: 'prd-template',           desc: 'PRD elicitation template',           category: 'capability', baseT: 1500, baseD: 2000, baseOk: true,  withT: 1420, withD: 1900, withOk: true  },
+        { name: 'persona-loader',         desc: 'Persona loading & template match',   category: 'capability', baseT:  800, baseD:  900, baseOk: true,  withT: 1200, withD: 1100, withOk: false },
+        { name: 'web-share',              desc: 'Web Share API integration',          category: 'capability', baseT:  600, baseD:  700, baseOk: true,  withT:  570, withD:  660, withOk: true  },
+      ];
+
+      // Register skills into lifecycle manager (for KPI / tab display)
+      dashboardSkillManager.registerSkills(samples.map(s => ({ name: s.name, description: s.desc, category: s.category })));
+
+      // Seed benchmark data
+      for (const s of samples) {
+        const sid = dashboardBenchmark.startBaseline(s.name, s.baseT, s.baseD, s.baseOk);
+        dashboardBenchmark.endWithSkill(sid, s.withT, s.withD, s.withOk);
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ seeded: samples.length, skills: samples.map(s => s.name) }));
+      return;
+    }
+
     if (url?.startsWith('/api/action/') && req.method === 'POST') {
       const action = url.split('/').pop() || '';
       const allowedActions: Record<string, string> = {
@@ -2029,12 +2076,13 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
     const url = `http://localhost:${port}`;
     log.info(`🐾 Dashboard running at ${url}`);
     // Auto-open browser on first launch
-    const { exec } = require('child_process');
-    const cmd = process.platform === 'win32' ? `start "" "${url}"`
-              : process.platform === 'darwin' ? `open "${url}"`
-              : `xdg-open "${url}"`;
-    exec(cmd, (err: any) => {
-      if (err) log.warn('Could not auto-open browser:', err.message);
+    import('child_process').then(({ exec }) => {
+      const cmd = process.platform === 'win32' ? `start "" "${url}"`
+                : process.platform === 'darwin' ? `open "${url}"`
+                : `xdg-open "${url}"`;
+      exec(cmd, (err: any) => {
+        if (err) log.warn('Could not auto-open browser:', err.message);
+      });
     });
   });
 }
