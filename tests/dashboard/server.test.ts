@@ -283,4 +283,27 @@ describe('Dashboard Server', () => {
       expect(content).toContain('clearErrorLog');
     });
   });
+
+  describe('Skills 2.0 UI', () => {
+    it('should have /api/skills route handler', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain("'/api/skills'");
+      expect(content).toContain('generateAuditReport');
+    });
+
+    it('should have page-skills page section in HTML', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain('id="page-skills"');
+      expect(content).toContain('skillGrid');
+    });
+
+    it('should have skills nav item in sidebar', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain('data-page="skills"');
+      expect(content).toContain('Skills 2.0');
+    });
+  });
 });

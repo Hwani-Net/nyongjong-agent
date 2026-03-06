@@ -5,6 +5,10 @@ import { type AppConfig } from '../core/config.js';
 import { initializeAgent, getAgentStatus } from '../agent.js';
 import { analyzeGoal } from '../workflow/understand.js';
 import { recordGateDecision, getGateHistory, getLastGate, getLastPRD, type GateHistoryEntry } from '../core/shared-state.js';
+import { SkillLifecycleManager, parseFrontmatter as parseSkillFrontmatter } from '../core/skill-lifecycle.js';
+
+// Module-level SkillLifecycleManager singleton for dashboard /api/skills
+const dashboardSkillManager = new SkillLifecycleManager();
 
 const log = createLogger('dashboard');
 
@@ -419,6 +423,42 @@ body {
 }
 .adapter-card.adapter-ok { border-left: 3px solid var(--green); }
 .adapter-card.adapter-off { border-left: 3px solid var(--red); opacity: 0.7; }
+
+/* Skills 2.0 */
+.skill-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+.skill-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 1rem;
+  box-shadow: var(--shadow-sm); transition: all 0.2s;
+  display: flex; flex-direction: column; gap: 0.375rem;
+}
+.skill-card:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
+.skill-card-name { font-size: 0.875rem; font-weight: 700; }
+.skill-card-desc { font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5; flex: 1; }
+.skill-card-meta { font-size: 0.6875rem; color: var(--text-secondary); display: flex; gap: 0.375rem; align-items: center; flex-wrap: wrap; }
+.badge-cap { background: var(--orange-light); color: var(--orange); }
+.badge-wf  { background: var(--blue-light);   color: var(--blue); }
+.badge-retire { background: var(--red-light);  color: var(--red); }
+.skill-tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.skill-tab {
+  padding: 0.375rem 0.875rem; border-radius: 9999px; font-size: 0.8125rem;
+  font-weight: 600; cursor: pointer; border: 1px solid var(--border);
+  background: var(--surface-alt); color: var(--text-secondary); transition: all 0.2s;
+}
+.skill-tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+.skill-donut-wrap { display: flex; align-items: center; gap: 1.5rem; }
+.skill-donut {
+  width: 80px; height: 80px; border-radius: 50%; flex-shrink: 0;
+  background: conic-gradient(var(--orange) 0% var(--cap-pct,50%), var(--blue) var(--cap-pct,50%) 100%);
+}
+.skill-donut-legend { display: flex; flex-direction: column; gap: 0.375rem; }
+.skill-donut-legend span { font-size: 0.8125rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
+.skill-donut-legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.skill-donut-legend .leg-cap::before  { background: var(--orange); }
+.skill-donut-legend .leg-wf::before   { background: var(--blue); }
 </style>
 </head>
 <body>
@@ -468,6 +508,9 @@ body {
       </div>
       <div class="nav-item" data-page="stitch" onclick="showPage('stitch')">
         <span class="icon">🎨</span> Stitch Design
+      </div>
+      <div class="nav-item" data-page="skills" onclick="showPage('skills')">
+        <span class="icon">⚡</span> Skills 2.0
       </div>
     </nav>
     <div class="sidebar-footer">
@@ -826,6 +869,68 @@ body {
         </div>
       </div>
 
+      <!-- Skills 2.0 page -->
+      <div class="page" id="page-skills">
+        <div class="fade-in">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:0.5rem">
+            <div style="display:flex;align-items:center;gap:0.75rem">
+              <span id="skillsHealthBadge" class="badge badge-green">⚡ Skills 2.0</span>
+              <span id="skillsLastUpdate" style="font-size:0.75rem;color:var(--text-secondary)">로딩 중...</span>
+            </div>
+            <button class="btn" onclick="refreshSkills()">🔄 새로고침</button>
+          </div>
+
+          <!-- KPI 카드 4개 -->
+          <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:1.5rem">
+            <div class="kpi-card">
+              <div class="kpi-label">총 스킬</div>
+              <div class="kpi-value" id="skillKpiTotal" style="color:var(--accent)">—</div>
+              <div class="kpi-sub">등록된 전체</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">⚡ Capability</div>
+              <div class="kpi-value" id="skillKpiCap" style="color:var(--orange)">—</div>
+              <div class="kpi-sub">임시 보완형</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">🔧 Workflow</div>
+              <div class="kpi-value" id="skillKpiWf" style="color:var(--blue)">—</div>
+              <div class="kpi-sub">영구 유지형</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">🔴 은퇴 후보</div>
+              <div class="kpi-value" id="skillKpiRetire" style="color:var(--red)">—</div>
+              <div class="kpi-sub">30일 미사용</div>
+            </div>
+          </div>
+
+          <!-- 비율 차트 -->
+          <div class="kpi-card section" style="margin-bottom:1.5rem">
+            <div class="section-title">📊 분류 비율</div>
+            <div class="skill-donut-wrap">
+              <div class="skill-donut" id="skillDonut" style="--cap-pct:50%"></div>
+              <div class="skill-donut-legend">
+                <span class="leg-cap"><span id="skillLegCap">Capability — 0개</span></span>
+                <span class="leg-wf"><span id="skillLegWf">Workflow — 0개</span></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 탭 필터 -->
+          <div class="skill-tabs">
+            <button class="skill-tab active" id="skillTab-all"      onclick="filterSkillTab('all')">🗂️ 전체</button>
+            <button class="skill-tab"         id="skillTab-cap"      onclick="filterSkillTab('cap')">⚡ Capability</button>
+            <button class="skill-tab"         id="skillTab-wf"       onclick="filterSkillTab('wf')">🔧 Workflow</button>
+            <button class="skill-tab"         id="skillTab-retire"   onclick="filterSkillTab('retire')">🔴 은퇴 후보</button>
+          </div>
+
+          <!-- 스킬 카드 그리드 -->
+          <div class="skill-grid" id="skillGrid">
+            <div style="color:var(--text-secondary);font-size:0.875rem;padding:2rem;text-align:center;grid-column:1/-1">⏳ 스킬 데이터 로딩 중...</div>
+          </div>
+        </div>
+      </div>
+
   </div>
 </div>
 
@@ -844,11 +949,12 @@ function showPage(page) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
   document.querySelector('[data-page="' + page + '"]').classList.add('active');
-  const titles = { dashboard:'📊 Dashboard', kanban:'📋 Kanban', tools:'🔧 Tools', personas:'🎭 Personas', chat:'💬 Chat', office:'🎮 Office', terminal:'🖥️ Terminal', inbox:'📨 Decision Inbox', settings:'⚙️ Settings', logs:'📝 Event Log', 'stage-gate':'🔀 Stage-Gate Monitor', 'cache-stats':'📦 Cache Stats', stitch:'🎨 Stitch Design' };
+  const titles = { dashboard:'📊 Dashboard', kanban:'📋 Kanban', tools:'🔧 Tools', personas:'🎭 Personas', chat:'💬 Chat', office:'🎮 Office', terminal:'🖥️ Terminal', inbox:'📨 Decision Inbox', settings:'⚙️ Settings', logs:'📝 Event Log', 'stage-gate':'🔀 Stage-Gate Monitor', 'cache-stats':'📦 Cache Stats', stitch:'🎨 Stitch Design', skills:'⚡ Skills 2.0' };
   document.getElementById('pageTitle').textContent = titles[page] || page;
   if (page === 'office') renderOffice();
   if (page === 'stage-gate') refreshStageGate();
   if (page === 'cache-stats') refreshCacheStats();
+  if (page === 'skills') refreshSkills();
 }
 
 // Chat panel
@@ -1394,6 +1500,78 @@ async function clearErrors() {
       '<div style="padding:0.75rem;text-align:center;color:var(--text-secondary);font-size:0.8rem">✅ 클리어 완료</div>';
   } catch {}
 }
+
+// ────── Skills 2.0 ──────
+let _allSkills = [];
+let _retireCandidates = [];
+let _currentSkillTab = 'all';
+
+async function refreshSkills() {
+  document.getElementById('skillsLastUpdate').textContent = '갱신 중...';
+  try {
+    const resp = await fetch('/api/skills');
+    const data = await resp.json();
+    const { totalSkills, capabilityCount, workflowCount, retireCandidates, allSkills } = data;
+
+    // KPIs
+    document.getElementById('skillKpiTotal').textContent  = totalSkills  ?? '—';
+    document.getElementById('skillKpiCap').textContent    = capabilityCount ?? '—';
+    document.getElementById('skillKpiWf').textContent     = workflowCount ?? '—';
+    document.getElementById('skillKpiRetire').textContent = retireCandidates?.length ?? '—';
+
+    // Donut
+    const pct = totalSkills > 0 ? Math.round((capabilityCount / totalSkills) * 100) : 0;
+    document.getElementById('skillDonut').style.setProperty('--cap-pct', pct + '%');
+    document.getElementById('skillLegCap').textContent = 'Capability — ' + capabilityCount + '개 (' + pct + '%)';
+    document.getElementById('skillLegWf').textContent  = 'Workflow — ' + workflowCount + '개 (' + (100 - pct) + '%)';
+
+    // Store for tab filter
+    _allSkills = allSkills || [];
+    _retireCandidates = retireCandidates || [];
+
+    document.getElementById('skillsLastUpdate').textContent = '방금 전 업데이트';
+    filterSkillTab(_currentSkillTab);
+  } catch (e) {
+    document.getElementById('skillsLastUpdate').textContent = '연결 실패: ' + e.message;
+  }
+}
+
+function filterSkillTab(tab) {
+  _currentSkillTab = tab;
+  document.querySelectorAll('.skill-tab').forEach(el => el.classList.remove('active'));
+  const activeTab = document.getElementById('skillTab-' + tab);
+  if (activeTab) activeTab.classList.add('active');
+
+  let filtered;
+  if (tab === 'cap')    filtered = _allSkills.filter(s => s.category === 'capability');
+  else if (tab === 'wf') filtered = _allSkills.filter(s => s.category === 'workflow');
+  else if (tab === 'retire') filtered = _retireCandidates;
+  else filtered = _allSkills;
+
+  renderSkillCards(filtered);
+}
+
+function renderSkillCards(skills) {
+  const grid = document.getElementById('skillGrid');
+  if (!skills || skills.length === 0) {
+    grid.innerHTML = '<div style="color:var(--text-secondary);font-size:0.875rem;padding:2rem;text-align:center;grid-column:1/-1">📭 해당 스킬이 없습니다</div>';
+    return;
+  }
+  grid.innerHTML = skills.map(s => {
+    const catBadge  = s.category === 'capability'
+      ? '<span class="badge badge-cap">⚡ capability</span>'
+      : '<span class="badge badge-wf">🔧 workflow</span>';
+    const retireBadge = s.retireCandidate ? '<span class="badge badge-retire">🔴 은퇴 후보</span>' : '';
+    const lastUsed  = s.lastUsed ? new Date(s.lastUsed).toLocaleDateString('ko-KR') : '미사용';
+    const usageText = s.useCount > 0 ? s.useCount + '회 사용' : '미사용';
+    return '<div class="skill-card fade-in">' +
+      '<div class="skill-card-name">' + s.name + '</div>' +
+      '<div class="skill-card-desc">' + (s.description || '설명 없음') + '</div>' +
+      '<div class="skill-card-meta">' + catBadge + retireBadge + '</div>' +
+      '<div class="skill-card-meta" style="margin-top:0.25rem">마지막: ' + lastUsed + ' · ' + usageText + '</div>' +
+    '</div>';
+  }).join('');
+}
 </script>
 </body>
 </html>`;
@@ -1560,6 +1738,52 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
         res.end(JSON.stringify({ ok: true, message: 'Error log cleared' }));
         return;
       }
+    }
+
+    // Skills 2.0 — skill audit endpoint
+    if (url === '/api/skills' && req.method === 'GET') {
+      try {
+        const { readdir, readFile } = await import('fs/promises');
+        const { resolve } = await import('path');
+
+        const agentRoot = process.env['AGENT_ROOT'] || process.cwd();
+        const skillsDir = resolve(agentRoot, '.agent', 'skills');
+
+        let scannedSkills: Array<{ name: string; description: string; category: 'capability' | 'workflow' }> = [];
+        try {
+          const entries = await readdir(skillsDir, { withFileTypes: true });
+          for (const entry of entries) {
+            if (!entry.isDirectory()) continue;
+            try {
+              const skillMdPath = resolve(skillsDir, entry.name, 'SKILL.md');
+              const content = await readFile(skillMdPath, 'utf-8');
+              const parsed = parseSkillFrontmatter(content);
+              scannedSkills.push(parsed);
+            } catch { /* skip unreadable skills */ }
+          }
+        } catch {
+          // .agent/skills dir not found — return empty report
+        }
+
+        dashboardSkillManager.registerSkills(scannedSkills);
+        const report = dashboardSkillManager.generateAuditReport(30);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          totalSkills: report.totalSkills,
+          capabilityCount: report.capabilityCount,
+          workflowCount: report.workflowCount,
+          retireCandidates: report.retireCandidates,
+          topUsed: report.topUsed,
+          neverUsed: report.neverUsed,
+          allSkills: dashboardSkillManager.getAllSkills(),
+          scannedAt: new Date().toISOString(),
+        }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Unknown error' }));
+      }
+      return;
     }
 
     if (url?.startsWith('/api/action/') && req.method === 'POST') {
