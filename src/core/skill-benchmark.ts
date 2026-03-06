@@ -1,6 +1,7 @@
 // Skill A/B Benchmark Engine — measures skill effectiveness
 // Inspired by Claude Code Skills 2.0's automated benchmarking
 import { createLogger } from '../utils/logger.js';
+import type { ObsidianStore } from './obsidian-store.js';
 
 const log = createLogger('skill-benchmark');
 
@@ -261,5 +262,76 @@ export class SkillBenchmark {
     entries.push(entry);
     // Keep max 100 entries per skill
     if (entries.length > 100) entries.shift();
+  }
+
+  /**
+   * Flush a single skill's benchmark result to Obsidian vault.
+   * Saves to `<basePath>/<skillName>.md` with YAML frontmatter.
+   * @returns The vault-relative path that was written.
+   */
+  async flushToObsidian(
+    skillName: string,
+    store: ObsidianStore,
+    basePath = '뇽죵이Agent/benchmark',
+  ): Promise<string> {
+    const stats = this.getSkillStats(skillName);
+    if (!stats) {
+      throw new Error(`SkillBenchmark: no data for "${skillName}". Run start_baseline first.`);
+    }
+
+    const flushedAt = new Date().toISOString();
+    const totalSamples = stats.withSkill.sampleCount + stats.withoutSkill.sampleCount;
+    const notePath = `${basePath}/${skillName}.md`;
+
+    const frontmatter = {
+      skill: skillName,
+      verdict: stats.verdict,
+      flushedAt,
+      sampleCount: totalSamples,
+      tokenImprovement: stats.improvement.tokens,
+      durationImprovement: stats.improvement.duration,
+      successImprovement: stats.improvement.success,
+    };
+
+    await store.writeNote(notePath, stats.report, frontmatter);
+    log.info(`Benchmark flushed to Obsidian: ${notePath}`);
+    return notePath;
+  }
+
+  /**
+   * Flush ALL benchmarked skills to Obsidian.
+   * Also writes a summary note at `<basePath>/summary.md`.
+   * @returns Array of paths written.
+   */
+  async flushAllToObsidian(
+    store: ObsidianStore,
+    basePath = '뇽죵이Agent/benchmark',
+  ): Promise<{ paths: string[]; summaryPath: string }> {
+    const skillNames = this.getAllBenchmarkedSkills();
+    if (skillNames.length === 0) {
+      throw new Error('SkillBenchmark: no benchmark data to flush.');
+    }
+
+    const paths: string[] = [];
+    for (const name of skillNames) {
+      try {
+        const path = await this.flushToObsidian(name, store, basePath);
+        paths.push(path);
+      } catch (err) {
+        log.warn(`flushAllToObsidian: skipping "${name}"`, err);
+      }
+    }
+
+    // Write summary note
+    const summaryReport = this.generateSummaryReport();
+    const summaryPath = `${basePath}/summary.md`;
+    await store.writeNote(summaryPath, summaryReport, {
+      flushedAt: new Date().toISOString(),
+      totalSkills: skillNames.length,
+      flushedSkills: paths.length,
+    });
+
+    log.info(`flushAllToObsidian: ${paths.length} skills + summary written`);
+    return { paths, summaryPath };
   }
 }

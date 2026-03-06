@@ -101,4 +101,65 @@ describe('SkillBenchmark', () => {
     const summary = engine.generateSummaryReport();
     expect(summary).toContain('아직 벤치마크 데이터가 없습니다');
   });
+
+  describe('flushToObsidian', () => {
+    // Minimal mock of ObsidianStore — only writeNote is needed
+    const createMockStore = () => {
+      const written: Array<{ path: string; content: string; frontmatter: Record<string, unknown> | undefined }> = [];
+      const mockStore = {
+        writeNote: async (path: string, content: string, fm?: Record<string, unknown>) => {
+          written.push({ path, content, frontmatter: fm });
+        },
+        _written: written,
+      };
+      return mockStore as unknown as import('../../src/core/obsidian-store.js').ObsidianStore & { _written: typeof written };
+    };
+
+    it('should flush a completed benchmark and return the vault path', async () => {
+      const id = engine.startBaseline('flush-skill', 1000, 500, true);
+      engine.endWithSkill(id, 700, 350, true);
+
+      const store = createMockStore();
+      const path = await engine.flushToObsidian('flush-skill', store);
+
+      expect(path).toBe('뇽죵이Agent/benchmark/flush-skill.md');
+      expect(store._written).toHaveLength(1);
+    });
+
+    it('should include verdict and metrics in flushed frontmatter', async () => {
+      const id = engine.startBaseline('meta-skill', 2000, 1000, false);
+      engine.endWithSkill(id, 500, 200, true);
+
+      const store = createMockStore();
+      await engine.flushToObsidian('meta-skill', store);
+
+      const written = store._written[0]!;
+      expect(written.frontmatter?.skill).toBe('meta-skill');
+      expect(written.frontmatter?.verdict).toBeDefined();
+      expect(written.frontmatter?.sampleCount).toBe(2);
+      expect(written.content).toContain('A/B 벤치마크');
+    });
+
+    it('should throw if skill has no benchmark data', async () => {
+      const store = createMockStore();
+      await expect(engine.flushToObsidian('no-such-skill', store)).rejects.toThrow(
+        'no data for "no-such-skill"',
+      );
+    });
+
+    it('should flush all skills and write summary.md', async () => {
+      const id1 = engine.startBaseline('skill-x', 1000, 500, true);
+      engine.endWithSkill(id1, 800, 400, true);
+      const id2 = engine.startBaseline('skill-y', 2000, 1000, false);
+      engine.endWithSkill(id2, 500, 200, true);
+
+      const store = createMockStore();
+      const { paths, summaryPath } = await engine.flushAllToObsidian(store);
+
+      expect(paths).toHaveLength(2);
+      expect(summaryPath).toBe('뇽죵이Agent/benchmark/summary.md');
+      // 2 skill notes + 1 summary = 3 writes total
+      expect(store._written).toHaveLength(3);
+    });
+  });
 });

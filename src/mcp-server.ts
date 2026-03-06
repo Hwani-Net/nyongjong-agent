@@ -1370,12 +1370,14 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     'skill_benchmark',
     'A/B benchmark: compare skill effectiveness with metrics (tokens, speed, success rate)',
     {
-      action: z.enum(['start_baseline', 'end_with_skill', 'get_stats', 'summary']).describe('Benchmark action'),
-      skillName: z.string().optional().describe('Skill name (required for start_baseline, end_with_skill, get_stats)'),
+      action: z.enum(['start_baseline', 'end_with_skill', 'get_stats', 'summary', 'flush', 'flush_all']).describe('Benchmark action'),
+      skillName: z.string().optional().describe('Skill name (required for start_baseline, end_with_skill, get_stats, flush)'),
       sessionId: z.string().optional().describe('Session ID from start_baseline (required for end_with_skill)'),
       tokens: z.number().optional().describe('Token count for this measurement'),
       durationMs: z.number().optional().describe('Duration in milliseconds'),
       success: z.boolean().optional().describe('Whether the task succeeded'),
+      autoFlush: z.boolean().optional().describe('Auto-flush to Obsidian after end_with_skill (default: false)'),
+      basePath: z.string().optional().describe('Vault base path for flush (default: 뇽죵이Agent/benchmark)'),
     },
     async (params) => {
       if (!registry.isEnabled('skill_benchmark')) {
@@ -1410,6 +1412,19 @@ export function createMcpServer(options: McpServerOptions): McpServer {
           if (!result) {
             return { content: [{ type: 'text' as const, text: '❌ Session not found or already completed' }] };
           }
+          // Auto-flush to Obsidian if requested
+          if (params.autoFlush) {
+            try {
+              const flushPath = await skillBenchmarkEngine.flushToObsidian(
+                result.skillName,
+                store,
+                params.basePath,
+              );
+              return { content: [{ type: 'text' as const, text: result.report + `\n\n✅ **자동 flush 완료**: \`${flushPath}\`` }] };
+            } catch (flushErr) {
+              return { content: [{ type: 'text' as const, text: result.report + `\n\n⚠️ Auto-flush 실패: ${flushErr instanceof Error ? flushErr.message : String(flushErr)}` }] };
+            }
+          }
           return { content: [{ type: 'text' as const, text: result.report }] };
         }
 
@@ -1429,11 +1444,41 @@ export function createMcpServer(options: McpServerOptions): McpServer {
           return { content: [{ type: 'text' as const, text: summary }] };
         }
 
+        case 'flush': {
+          if (!params.skillName) {
+            return { content: [{ type: 'text' as const, text: '❌ skillName is required for flush' }] };
+          }
+          try {
+            const flushPath = await skillBenchmarkEngine.flushToObsidian(
+              params.skillName,
+              store,
+              params.basePath,
+            );
+            return { content: [{ type: 'text' as const, text: `✅ 벤치마크 결과를 Obsidian에 저장했습니다.\n\n📄 경로: \`${flushPath}\`` }] };
+          } catch (err) {
+            return { content: [{ type: 'text' as const, text: `❌ flush 실패: ${err instanceof Error ? err.message : String(err)}` }] };
+          }
+        }
+
+        case 'flush_all': {
+          try {
+            const { paths, summaryPath } = await skillBenchmarkEngine.flushAllToObsidian(
+              store,
+              params.basePath,
+            );
+            const pathList = paths.map(p => `- \`${p}\``).join('\n');
+            return { content: [{ type: 'text' as const, text: `✅ 전체 벤치마크 flush 완료!\n\n**저장된 스킬 (${paths.length}개):**\n${pathList}\n\n📊 종합 보고서: \`${summaryPath}\`` }] };
+          } catch (err) {
+            return { content: [{ type: 'text' as const, text: `❌ flush_all 실패: ${err instanceof Error ? err.message : String(err)}` }] };
+          }
+        }
+
         default:
-          return { content: [{ type: 'text' as const, text: '❌ Unknown action. Use: start_baseline, end_with_skill, get_stats, summary' }] };
+          return { content: [{ type: 'text' as const, text: '❌ Unknown action. Use: start_baseline, end_with_skill, get_stats, summary, flush, flush_all' }] };
       }
     },
   );
+
 
   const totalTools = registry.getState().length;
   log.info(`MCP Server configured with ${totalTools} tools (runtime toggleable)`);
