@@ -7,6 +7,7 @@ import { analyzeGoal } from '../workflow/understand.js';
 import { recordGateDecision, getGateHistory, getLastGate, getLastPRD, type GateHistoryEntry } from '../core/shared-state.js';
 import { SkillLifecycleManager, parseFrontmatter as parseSkillFrontmatter } from '../core/skill-lifecycle.js';
 import { SkillBenchmark } from '../core/skill-benchmark.js';
+import { ObsidianStore } from '../core/obsidian-store.js';
 
 // Module-level singletons for dashboard /api/skills
 const dashboardSkillManager = new SkillLifecycleManager();
@@ -941,6 +942,10 @@ body {
             <div id="bmResultList" style="font-size:0.8125rem;color:var(--text-secondary)">
               이번 세션에서 벤치마크된 스킬 없음
             </div>
+            <div style="display:flex;gap:0.5rem;margin-top:0.75rem;justify-content:flex-end">
+              <span id="bmFlushStatus" style="font-size:0.75rem;color:var(--text-secondary);align-self:center"></span>
+              <button class="btn" id="bmFlushBtn" onclick="flushBenchmarkToObsidian()" style="background:var(--accent);color:#fff;border:none">💾 Obsidian 저장</button>
+            </div>
           </div>
 
           <!-- 탭 필터 -->
@@ -1549,6 +1554,31 @@ async function seedDemoData() {
   }
 }
 
+async function flushBenchmarkToObsidian() {
+  const btn = document.getElementById('bmFlushBtn');
+  const statusEl = document.getElementById('bmFlushStatus');
+  try {
+    btn.textContent = '⏳ 저장 중...';
+    btn.disabled = true;
+    statusEl.textContent = '';
+    const resp = await fetch('/api/skills/flush-all', { method: 'POST' });
+    const data = await resp.json();
+    if (data.ok) {
+      statusEl.textContent = '✅ ' + data.flushed + '개 스킬 + 종합 보고서 저장 완료';
+      statusEl.style.color = 'var(--green)';
+    } else {
+      statusEl.textContent = '❌ ' + (data.error || '저장 실패');
+      statusEl.style.color = 'var(--red)';
+    }
+  } catch(e) {
+    statusEl.textContent = '❌ 네트워크 오류: ' + e.message;
+    statusEl.style.color = 'var(--red)';
+  } finally {
+    btn.textContent = '💾 Obsidian 저장';
+    btn.disabled = false;
+  }
+}
+
 async function refreshSkills() {
   document.getElementById('skillsLastUpdate').textContent = '갱신 중...';
   try {
@@ -1865,6 +1895,23 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Unknown error' }));
+      }
+      return;
+    }
+
+    // Skills 2.0 — flush all benchmark data to Obsidian
+    if (url === '/api/skills/flush-all' && req.method === 'POST') {
+      try {
+        const obsidianStore = new ObsidianStore({
+          apiKey: config.OBSIDIAN_API_KEY,
+          apiUrl: config.OBSIDIAN_API_URL,
+        });
+        const { paths, summaryPath } = await dashboardBenchmark.flushAllToObsidian(obsidianStore);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, flushed: paths.length, paths, summaryPath }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: err instanceof Error ? err.message : String(err) }));
       }
       return;
     }

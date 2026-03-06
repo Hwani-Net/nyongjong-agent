@@ -314,5 +314,40 @@ describe('Dashboard Server', () => {
       expect(content).toContain('keepCount');
       expect(content).toContain('bmKeepCount');
     });
+
+    it('should have /api/skills/flush-all POST endpoint', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain("'/api/skills/flush-all'");
+      expect(content).toContain('flushAllToObsidian');
+      expect(content).toContain("req.method === 'POST'");
+    });
+
+    it('should import ObsidianStore for flush-all endpoint', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain("import { ObsidianStore }");
+      expect(content).toContain('obsidian-store');
+    });
+
+    it('should have flushBenchmarkToObsidian JS function in HTML', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain('flushBenchmarkToObsidian');
+      expect(content).toContain('bmFlushBtn');
+      expect(content).toContain('bmFlushStatus');
+      expect(content).toContain('Obsidian 저장');
+    });
+
+    it('should have 5 skill cards render correctly', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      // seed-demo seeds 5 skills
+      expect(content).toContain('pentagonal-audit');
+      expect(content).toContain('stitch-pencil-pipeline');
+      expect(content).toContain('prd-template');
+      expect(content).toContain('persona-loader');
+      expect(content).toContain('web-share');
+    });
   });
 });
