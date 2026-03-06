@@ -224,6 +224,10 @@ body {
 }
 .tool-enabled { background: var(--accent-light); color: var(--accent); }
 .tool-disabled { background: var(--surface-alt); color: var(--text-secondary); text-decoration: line-through; opacity: 0.6; }
+.tool-group-skill-summary {
+  margin-top: 0.5rem; padding-top: 0.375rem; border-top: 1px solid var(--border);
+  font-size: 0.6875rem; color: var(--text-secondary); display: flex; gap: 0.375rem; flex-wrap: wrap; align-items: center;
+}
 
 /* Persona grid */
 .persona-grid {
@@ -606,6 +610,13 @@ body {
 
       <!-- Tools page -->
       <div class="page" id="page-tools">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem">
+          <div style="display:flex;align-items:center;gap:0.75rem">
+            <span class="badge badge-blue">🔧 Tool Registry</span>
+            <span id="toolsSkillSummary" style="font-size:0.75rem;color:var(--text-secondary)">스킬: — capability · — workflow</span>
+          </div>
+          <button class="btn" onclick="refreshToolRegistrySkills()">🔄 스킬 현황 갱신</button>
+        </div>
         <div class="tool-groups fade-in" id="toolGroupsGrid"></div>
       </div>
 
@@ -975,6 +986,34 @@ function toggleTheme() {
 }
 if (localStorage.getItem('theme') === 'dark') document.documentElement.dataset.theme = 'dark';
 
+// Tool Registry — Skill 분류 갱신
+async function refreshToolRegistrySkills() {
+  try {
+    const resp = await fetch('/api/skills');
+    const data = await resp.json();
+    // 상단 summary 업데이트
+    const summaryEl = document.getElementById('toolsSkillSummary');
+    if (summaryEl) {
+      const retireCount = data.retireCandidates?.length ?? 0;
+      summaryEl.innerHTML =
+        '<span class="badge badge-cap" style="font-size:0.65rem">⚡ ' + (data.capabilityCount ?? 0) + ' capability</span>' +
+        '<span class="badge badge-wf" style="font-size:0.65rem">🔧 ' + (data.workflowCount ?? 0) + ' workflow</span>' +
+        (retireCount > 0 ? '<span class="badge badge-retire" style="font-size:0.65rem">🔴 ' + retireCount + ' 은퇴 후보</span>' : '') +
+        '<span style="margin-left:0.25rem">총 ' + (data.totalSkills ?? 0) + '개 스킬</span>';
+    }
+    // lifecycle 그룹 카드 하단 노드 업데이트
+    const lsEl = document.getElementById('toolGroupSkillSummary-lifecycle');
+    if (lsEl) {
+      const retireCount = data.retireCandidates?.length ?? 0;
+      lsEl.innerHTML =
+        '<span>Skills 2.0:</span>' +
+        '<span class="badge badge-cap" style="font-size:0.65rem">⚡ ' + (data.capabilityCount ?? 0) + ' capability</span>' +
+        '<span class="badge badge-wf" style="font-size:0.65rem">🔧 ' + (data.workflowCount ?? 0) + ' workflow</span>' +
+        (retireCount > 0 ? '<span class="badge badge-retire" style="font-size:0.65rem">🔴 ' + retireCount + ' 은퇴 후보</span>' : '<span class="badge badge-green" style="font-size:0.65rem">✅ 은퇴 후보 없음</span>');
+    }
+  } catch { /* Tools 페이지는 스킬 데이터 없이도 동작 */ }
+}
+
 // Navigation
 function showPage(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -987,6 +1026,7 @@ function showPage(page) {
   if (page === 'stage-gate') refreshStageGate();
   if (page === 'cache-stats') refreshCacheStats();
   if (page === 'skills') refreshSkills();
+  if (page === 'tools') refreshToolRegistrySkills();
 }
 
 // Chat panel
@@ -1210,6 +1250,9 @@ function updateDashboard(data) {
     totalEnabled += enabled.length;
     totalDisabled += disabled.length;
     const allEnabled = disabled.length === 0;
+    const skillSummaryHtml = name === 'lifecycle'
+      ? '<div class="tool-group-skill-summary" id="toolGroupSkillSummary-lifecycle">⏳ 스킬 분류 로딩 중...</div>'
+      : '';
     return '<div class="tool-group">' +
       '<div class="tool-group-header">' +
         '<span class="tool-group-name">' + info.icon + ' ' + name + '</span>' +
@@ -1221,6 +1264,7 @@ function updateDashboard(data) {
         enabled.map(t => '<span class="tool-chip tool-enabled">' + t + '</span>').join('') +
         disabled.map(t => '<span class="tool-chip tool-disabled">' + t + '</span>').join('') +
       '</div>' +
+      skillSummaryHtml +
     '</div>';
   }).join('');
   document.getElementById('toolGroupsGrid').innerHTML = groupsHtml;

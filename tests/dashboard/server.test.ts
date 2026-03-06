@@ -349,5 +349,26 @@ describe('Dashboard Server', () => {
       expect(content).toContain('persona-loader');
       expect(content).toContain('web-share');
     });
+
+    it('should have toolsSkillSummary element in Tool Registry page', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain('toolsSkillSummary');
+      expect(content).toContain('capability');
+      expect(content).toContain('workflow');
+    });
+
+    it('should have refreshToolRegistrySkills JS function', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain('refreshToolRegistrySkills');
+      expect(content).toContain('toolGroupSkillSummary-lifecycle');
+    });
+
+    it('should trigger refreshToolRegistrySkills when tools page is shown', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain("if (page === 'tools') refreshToolRegistrySkills()");
+    });
   });
 });
