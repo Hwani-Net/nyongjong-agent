@@ -1891,8 +1891,10 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
       try {
         const { readdir, readFile } = await import('fs/promises');
         const { resolve } = await import('path');
+        const { homedir } = await import('os');
 
-        const agentRoot = process.env['AGENT_ROOT'] || process.cwd();
+        // .agent/skills/ lives under the user home dir, not the project dir
+        const agentRoot = process.env['AGENT_ROOT'] || homedir();
         const skillsDir = resolve(agentRoot, '.agent', 'skills');
 
         let scannedSkills: Array<{ name: string; description: string; category: 'capability' | 'workflow' }> = [];
