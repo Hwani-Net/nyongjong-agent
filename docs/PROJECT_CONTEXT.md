@@ -8,11 +8,11 @@
 | 항목 | 값 |
 |------|-----|
 | **이름** | `nyongjong-agent` |
-| **버전** | `0.6.0` |
+| **버전** | `0.7.1` |
 | **경로** | `E:\Agent\뇽죵이Agent` |
 | **런타임** | Node.js ≥22, TypeScript, ESM |
-| **테스트** | vitest — **287/287 pass** (22 파일) |
-| **MCP 도구** | **31개** (core 3 + toggle 28) |
+| **테스트** | vitest — **316/316 pass** (24 파일) |
+| **MCP 도구** | **33개** (core 3 + toggle 28 + lifecycle 2) |
 | **프로토콜** | Model Context Protocol (stdio) |
 | **GitHub** | https://github.com/Hwani-Net/nyongjong-agent |
 | **npm** | https://www.npmjs.com/package/nyongjong-agent |
@@ -22,6 +22,7 @@
 ```
 src/
 ├── core/          # Config, ObsidianStore, TaskManager, ToolRegistry, SharedState
+│                  # SkillLifecycleManager (v0.7.1), SkillBenchmark (v0.7.1)
 ├── personas/      # PersonaLoader, PersonaEngine, PersonaSimulator, Templates, Generator
 ├── workflow/      # Understand, BusinessGate, PRDElicitation, FeedbackRouter, CycleRunner
 ├── grounding/     # GroundingEngine, Adapters (KOSIS, Law, Naver, Trends, AppReviews, Web)
@@ -30,14 +31,14 @@ src/
 ├── advisory/      # CriticCheck (AgentPRM 패턴)
 ├── dashboard/     # Real-time SSE dashboard
 ├── utils/         # Logger (ring buffer)
-├── mcp-server.ts  # 28개 도구 등록 + runtime toggle
+├── mcp-server.ts  # 33개 도구 등록 + runtime toggle
 ├── agent.ts       # Agent orchestration
 └── index.ts       # Entry point
 ```
 
 ## 📊 현재 진행 상태
 
-### Phase: v0.6.0 릴리스 완료 ✅
+### Phase: v0.7.1 릴리스 완료 ✅
 
 - [x] Phase 0.1: 초기 설정 (MCP + vitest)
 - [x] Phase 0.2: Obsidian + Task Manager
@@ -45,21 +46,31 @@ src/
 - [x] Phase 0.4: Ralph Mode + Grounding + Tool Toggle
 - [x] Phase 0.5: Stage-Gate + Dashboard Health + Git Worktree
 - [x] Phase 0.6: **Stitch 도구 3종** (Ideate, DesignSystem, Forum)
-- [x] 유닛 테스트 41개 추가 (287/287 pass)
-- [x] README.md v0.6.0 업데이트 (31 tools, 287 tests, Stitch 섹션)
-- [x] npm build 성공 (205KB 패키지)
-- [x] Dashboard에 Stitch Design 페이지 추가 (13번째 페이지)
-- [x] Git push (GitHub: **Hwani-Net/nyongjong-agent**)
+- [x] 유닛 테스트 287/287 pass → README.md v0.6.0 업데이트
 - [x] npm publish 완료 (**nyongjong-agent@0.6.0**)
 - [x] ObsidianStore REST API 전환 완료
 - [x] `docs/` 레거시 5파일 아카이브 → `docs/archive/`
-- [x] LESSONS_LEARNED.md execute_shell 구식 항목 DEPRECATED 처리
-- [x] Obsidian 뇽죵이Agent 노트 동기화
+
+### Phase: v0.7.0 → v0.7.1 완료 ✅ (2026-03-06)
+
+- [x] Phase 0.7: **Skills 2.0** — SkillLifecycleManager + SkillBenchmark A/B 엔진
+  - [x] `src/core/skill-lifecycle.ts` [NEW] — capability/workflow 이원화, 사용량 추적, 은퇴 후보 식별
+  - [x] `src/core/skill-benchmark.ts` [NEW] — A/B 성공률/토큰/속도 비교 → KEEP/REVIEW/RETIRE
+  - [x] `src/core/shared-state.ts` [MODIFIED] — SkillUsageEntry 링 버퍼 (max 200)
+  - [x] `src/mcp-server.ts` [MODIFIED] — `skill_audit`, `skill_benchmark` 도구 2개 등록
+  - [x] `tests/core/skill-lifecycle.test.ts` [NEW] — 14 tests
+  - [x] `tests/core/skill-benchmark.test.ts` [NEW] — 15 tests
+  - [x] 52개 `.agent/skills/*/SKILL.md` — `category` 태그 추가 (capability 15개 / workflow 37개)
+  - [x] tsc --noEmit 에러 0개, vitest 316/316 pass
+  - [x] CHANGELOG.md v0.7.1 업데이트
+  - [x] Git push (커밋 `43b708e`) + npm publish 완료
 
 ### TODO (미래)
 - [ ] npm Token 갱신 필요일: **2026-06-02** (Granular Token 90일 만료)
 - [ ] Dashboard Stitch 페이지에 라이브 데이터 연동 (실시간 포럼 모니터링)
 - [ ] GEMINI.md 다이어트 (572줄 → 축소)
+- [ ] SkillBenchmark 메트릭 → Obsidian flush 구현 (현재 in-memory only)
+- [ ] Dashboard Tool Registry 페이지에 Skill 분류(capability/workflow) 표시
 - [x] MCP → 스킬 마이그레이션 (2026-03-04): `perplexity-ask` → disabled (tavily 대체), `agentation` → disabled (온디맨드), `brave-search` → 설정 제거
 
 ## 🔧 ADR (Architecture Decision Records)
@@ -83,6 +94,14 @@ src/
 - **이유**: 경로 하드코딩 의존 제거, 볼트 불일치 위험 해소
 - **관련**: `src/core/obsidian-store.ts` 전면 재작성
 
+### ADR-005: Skills 2.0 이원화 분류 기준 (2026-03-06)
+- **결정**: 스킬을 `capability`(15개)와 `workflow`(37개) 두 카테고리로 분류
+- **capability 기준**: 모델 발전 시 불필요해질 수 있는 API 래퍼, 포맷 변환, 단일 도구 통합 등
+- **workflow 기준**: 팀 규정, 배포 흐름, 코딩 표준 등 모델 성능과 무관하게 영구 유지되는 프로세스
+- **은퇴 기준**: capability + 30일 미사용 → `skill_audit`이 자동 플래그
+- **메트릭 저장**: in-memory (shared-state 링 버퍼 max 200) — Obsidian flush는 향후 구현
+
 ## 🚨 알려진 이슈
 - `persona_generate` 도구가 README에 언급되나 registry에서 확인 필요
 - Stitch forum RSS URL이 실제로 접근 가능한지 네트워크 테스트 미완료
+- SkillBenchmark 메트릭이 in-memory에만 저장됨 — 서버 재시작 시 초기화

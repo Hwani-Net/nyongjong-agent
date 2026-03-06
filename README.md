@@ -1,8 +1,8 @@
-# 🐾 뇽죵이 Agent v0.6.0
+# 🐾 뇽죵이 Agent v0.7.1
 
-> AI-native 자율 에이전트 서버 — MCP 프로토콜, Obsidian 메모리, 멀티 모델, 페르소나 시스템, Stitch 디자인 오케스트레이션
+> AI-native 자율 에이전트 서버 — MCP 프로토콜, Obsidian 메모리, 멀티 모델, 페르소나 시스템, Stitch 디자인 오케스트레이션, **Skills 2.0 수명 관리**
 
-![Tests](https://img.shields.io/badge/tests-287%2F287-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-core_95%25+-blue) ![v0.6.0](https://img.shields.io/badge/version-0.6.0-green)
+![Tests](https://img.shields.io/badge/tests-316%2F316-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-core_95%25+-blue) ![v0.7.1](https://img.shields.io/badge/version-0.7.1-green)
 
 ## Quick Start
 
@@ -13,7 +13,7 @@ cp .env.example .env    # 경로 설정
 npm start               # MCP 서버 (Antigravity 자동 연결)
 npm run dashboard       # 대시보드 → http://localhost:3100
 npm run test:mcp        # MCP 연결 검증
-npm test                # 유닛 테스트 (287/287, 22 files)
+npm test                # 유닛 테스트 (316/316, 24 files)
 npm run test:coverage   # 커버리지 리포트
 ```
 
@@ -21,7 +21,7 @@ npm run test:coverage   # 커버리지 리포트
 
 ```
 ┌─────────────┐    MCP stdio    ┌──────────────────┐
-│ Antigravity  │◄──────────────►│  MCP Server (31)  │
+│ Antigravity  │◄──────────────►│  MCP Server (33)  │
 │ (VS Code)    │                │                    │
 └─────────────┘                └────────┬───────────┘
                                         │
@@ -58,7 +58,7 @@ npm run test:coverage   # 커버리지 리포트
 |---|------|-------------|
 | 1 | 📊 **Dashboard** | 6 KPI 카드 + Task Queue 실시간 |
 | 2 | 📋 **Kanban** | 6단계 AI 순환 워크플로우 보드 |
-| 3 | 🔧 **Tool Registry** | 9그룹 31도구 상태 모니터링 |
+| 3 | 🔧 **Tool Registry** | 10그룹 33도구 상태 모니터링 (Skills 2.0 포함) |
 | 4 | 🎭 **Personas** | 6개 페르소나 카테고리별 그리드 |
 | 5 | 💬 **Chat** | 대표님 ↔ 에이전트 대화 인터페이스 |
 | 6 | 🎮 **Office** | 에이전트 오피스 뷰 (역할별 데스크) |
@@ -87,7 +87,7 @@ npm run test:coverage   # 커버리지 리포트
 - 🎨 글래시 디자인 + CSS 애니메이션
 - 📱 반응형 쉘 레이아웃 (260px 사이드바)
 
-## MCP Tools (31)
+## MCP Tools (33)
 
 ### Core
 | Tool | Description |
@@ -167,6 +167,12 @@ npm run test:coverage   # 커버리지 리포트
 | `stitch_design_system_extract` | Stitch HTML → 디자인 토큰 추출 + DESIGN.md 생성 |
 | `stitch_forum_check` | Stitch 포럼 RSS 모니터링 + 스킬 키워드 분류 |
 
+### Lifecycle (Skills 2.0)
+| Tool | Description |
+|------|--------------|
+| `skill_audit` | `.agent/skills/` 스캔 → capability/workflow 이원화 분류 + 30일 미사용 은퇴 후보 식별 |
+| `skill_benchmark` | A/B 벤치마크 (`start_baseline` → `end_with_skill`) — 성공률/토큰/속도 비교 → KEEP/REVIEW/RETIRE |
+
 ## Personas
 
 ### 기본 페르소나 (6명)
@@ -214,7 +220,7 @@ Gate 0 (사업성) → Gate 1 (PRD) → Prototype → Validate ↔ Evolve → Re
 ```
 src/
 ├── index.ts              # MCP entry point
-├── mcp-server.ts         # 31 MCP tools
+├── mcp-server.ts         # 33 MCP tools
 ├── agent.ts              # Module orchestrator
 ├── dashboard-main.ts     # Dashboard entry point
 ├── core/
@@ -223,7 +229,9 @@ src/
 │   ├── model-selector.ts # Multi-model recommender
 │   ├── task-manager.ts   # Task queue
 │   ├── tool-registry.ts  # Tool toggle registry
-│   └── shared-state.ts   # Gate history, PRD state
+│   ├── shared-state.ts   # Gate history, PRD state, SkillUsage ring buffer
+│   ├── skill-lifecycle.ts # SkillLifecycleManager — capability/workflow 분류, 사용 추적
+│   └── skill-benchmark.ts # SkillBenchmark — A/B 엔진 (KEEP/REVIEW/RETIRE)
 ├── personas/
 │   ├── persona-loader.ts    # Obsidian CRUD
 │   ├── persona-engine.ts    # Stage-based selection
@@ -264,7 +272,7 @@ src/
     └── logger.ts         # Structured logging
 
 data/personas/            # Default persona definitions (6)
-tests/                    # 287 unit tests (22 files)
+tests/                    # 316 unit tests (24 files)
 scripts/test-mcp.ts       # MCP connection verifier
 ```
 
