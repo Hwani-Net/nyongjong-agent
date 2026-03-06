@@ -305,5 +305,14 @@ describe('Dashboard Server', () => {
       expect(content).toContain('data-page="skills"');
       expect(content).toContain('Skills 2.0');
     });
+
+    it('should include benchmarkData in /api/skills response', async () => {
+      const fs = await import('fs/promises');
+      const content = await fs.readFile('src/dashboard/server.ts', 'utf-8');
+      expect(content).toContain('benchmarkData');
+      expect(content).toContain('dashboardBenchmark');
+      expect(content).toContain('keepCount');
+      expect(content).toContain('bmKeepCount');
+    });
   });
 });

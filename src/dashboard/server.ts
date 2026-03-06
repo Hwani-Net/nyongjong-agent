@@ -6,9 +6,11 @@ import { initializeAgent, getAgentStatus } from '../agent.js';
 import { analyzeGoal } from '../workflow/understand.js';
 import { recordGateDecision, getGateHistory, getLastGate, getLastPRD, type GateHistoryEntry } from '../core/shared-state.js';
 import { SkillLifecycleManager, parseFrontmatter as parseSkillFrontmatter } from '../core/skill-lifecycle.js';
+import { SkillBenchmark } from '../core/skill-benchmark.js';
 
-// Module-level SkillLifecycleManager singleton for dashboard /api/skills
+// Module-level singletons for dashboard /api/skills
 const dashboardSkillManager = new SkillLifecycleManager();
+const dashboardBenchmark = new SkillBenchmark();
 
 const log = createLogger('dashboard');
 
@@ -916,6 +918,28 @@ body {
             </div>
           </div>
 
+          <!-- 벤치마크 판정 현황 -->
+          <div class="kpi-card section" style="margin-bottom:1.5rem">
+            <div class="section-title">📈 A/B 벤치마크 판정 현황 <span style="font-size:0.75rem;font-weight:400;color:var(--text-secondary)">(현재 세션)</span></div>
+            <div style="display:flex;gap:2rem;align-items:center;flex-wrap:wrap;margin-bottom:0.75rem">
+              <div style="text-align:center">
+                <div class="kpi-value" id="bmKeepCount" style="color:var(--green);font-size:1.75rem">—</div>
+                <div class="kpi-label">✅ KEEP</div>
+              </div>
+              <div style="text-align:center">
+                <div class="kpi-value" id="bmReviewCount" style="color:var(--orange);font-size:1.75rem">—</div>
+                <div class="kpi-label">🟡 REVIEW</div>
+              </div>
+              <div style="text-align:center">
+                <div class="kpi-value" id="bmRetireCount" style="color:var(--red);font-size:1.75rem">—</div>
+                <div class="kpi-label">🔴 RETIRE</div>
+              </div>
+            </div>
+            <div id="bmResultList" style="font-size:0.8125rem;color:var(--text-secondary)">
+              이번 세션에서 벤치마크된 스킬 없음
+            </div>
+          </div>
+
           <!-- 탭 필터 -->
           <div class="skill-tabs">
             <button class="skill-tab active" id="skillTab-all"      onclick="filterSkillTab('all')">🗂️ 전체</button>
@@ -1504,6 +1528,7 @@ async function clearErrors() {
 // ────── Skills 2.0 ──────
 let _allSkills = [];
 let _retireCandidates = [];
+let _benchmarkResults = [];
 let _currentSkillTab = 'all';
 
 async function refreshSkills() {
@@ -1531,6 +1556,27 @@ async function refreshSkills() {
 
     document.getElementById('skillsLastUpdate').textContent = '방금 전 업데이트';
     filterSkillTab(_currentSkillTab);
+
+    // Benchmark data rendering
+    const bm = data.benchmarkData || {};
+    document.getElementById('bmKeepCount').textContent   = bm.keepCount  ?? '0';
+    document.getElementById('bmReviewCount').textContent = bm.reviewCount ?? '0';
+    document.getElementById('bmRetireCount').textContent = bm.retireCount ?? '0';
+    const bmResults = bm.results || [];
+    _benchmarkResults = bmResults; // store for card badge lookup
+    const bmEl = document.getElementById('bmResultList');
+    if (bmResults.length > 0) {
+      bmEl.innerHTML = bmResults.map(r => {
+        const verdictIcon = r.verdict === 'KEEP' ? '✅' : r.verdict === 'RETIRE' ? '🔴' : '🟡';
+        return '<div style="display:flex;gap:0.5rem;padding:0.375rem 0;border-bottom:1px solid var(--border);align-items:center">' +
+          '<span class="badge ' + (r.verdict==='KEEP'?'badge-green':r.verdict==='RETIRE'?'badge-red':'badge-orange') + '">' + verdictIcon + ' ' + r.verdict + '</span>' +
+          '<span style="flex:1;font-size:0.8rem">' + r.skillName + '</span>' +
+          '<span style="color:var(--text-secondary);font-size:0.75rem">토큰 ' + r.tokens + ' | 속도 ' + r.duration + '</span>' +
+          '</div>';
+      }).join('');
+    } else {
+      bmEl.textContent = '이번 세션에서 벤치마크된 스킬 없음';
+    }
   } catch (e) {
     document.getElementById('skillsLastUpdate').textContent = '연결 실패: ' + e.message;
   }
@@ -1562,12 +1608,20 @@ function renderSkillCards(skills) {
       ? '<span class="badge badge-cap">⚡ capability</span>'
       : '<span class="badge badge-wf">🔧 workflow</span>';
     const retireBadge = s.retireCandidate ? '<span class="badge badge-retire">🔴 은퇴 후보</span>' : '';
+    // Lookup benchmark verdict for this skill
+    const bmResult = _benchmarkResults.find(r => r.skillName === s.name);
+    let verdictBadge = '';
+    if (bmResult) {
+      const vcls  = bmResult.verdict === 'KEEP' ? 'badge-green' : bmResult.verdict === 'RETIRE' ? 'badge-red' : 'badge-orange';
+      const vicon = bmResult.verdict === 'KEEP' ? '✅' : bmResult.verdict === 'RETIRE' ? '🔴' : '🟡';
+      verdictBadge = '<span class="badge ' + vcls + '">' + vicon + ' ' + bmResult.verdict + '</span>';
+    }
     const lastUsed  = s.lastUsed ? new Date(s.lastUsed).toLocaleDateString('ko-KR') : '미사용';
     const usageText = s.useCount > 0 ? s.useCount + '회 사용' : '미사용';
     return '<div class="skill-card fade-in">' +
       '<div class="skill-card-name">' + s.name + '</div>' +
       '<div class="skill-card-desc">' + (s.description || '설명 없음') + '</div>' +
-      '<div class="skill-card-meta">' + catBadge + retireBadge + '</div>' +
+      '<div class="skill-card-meta">' + catBadge + retireBadge + verdictBadge + '</div>' +
       '<div class="skill-card-meta" style="margin-top:0.25rem">마지막: ' + lastUsed + ' · ' + usageText + '</div>' +
     '</div>';
   }).join('');
@@ -1768,6 +1822,16 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
         dashboardSkillManager.registerSkills(scannedSkills);
         const report = dashboardSkillManager.generateAuditReport(30);
 
+        // Benchmark data — current in-memory session
+        const benchmarkedSkills = dashboardBenchmark.getAllBenchmarkedSkills();
+        const benchmarkResults = benchmarkedSkills.map(name => {
+          const s = dashboardBenchmark.getSkillStats(name);
+          return s ? { skillName: name, verdict: s.verdict, tokens: s.improvement.tokens, duration: s.improvement.duration, success: s.improvement.success } : null;
+        }).filter(Boolean);
+        const keepCount   = benchmarkResults.filter(r => r?.verdict === 'KEEP').length;
+        const reviewCount = benchmarkResults.filter(r => r?.verdict === 'REVIEW').length;
+        const retireCount = benchmarkResults.filter(r => r?.verdict === 'RETIRE').length;
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           totalSkills: report.totalSkills,
@@ -1777,6 +1841,7 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
           topUsed: report.topUsed,
           neverUsed: report.neverUsed,
           allSkills: dashboardSkillManager.getAllSkills(),
+          benchmarkData: { benchmarkedSkills, keepCount, reviewCount, retireCount, results: benchmarkResults },
           scannedAt: new Date().toISOString(),
         }));
       } catch (err) {
