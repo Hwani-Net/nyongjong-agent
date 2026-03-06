@@ -11,7 +11,7 @@
 | **버전** | `0.7.1` |
 | **경로** | `E:\Agent\뇽죵이Agent` |
 | **런타임** | Node.js ≥22, TypeScript, ESM |
-| **테스트** | vitest — **316/316 pass** (24 파일) |
+| **테스트** | vitest — **328/328 pass** (24 파일) |
 | **MCP 도구** | **33개** (core 3 + toggle 28 + lifecycle 2) |
 | **프로토콜** | Model Context Protocol (stdio) |
 | **GitHub** | https://github.com/Hwani-Net/nyongjong-agent |
@@ -69,7 +69,10 @@ src/
 - [ ] npm Token 갱신 필요일: **2026-06-02** (Granular Token 90일 만료)
 - [ ] Dashboard Stitch 페이지에 라이브 데이터 연동 (실시간 포럼 모니터링)
 - [ ] GEMINI.md 다이어트 (572줄 → 축소)
-- [ ] SkillBenchmark 메트릭 → Obsidian flush 구현 (현재 in-memory only)
+- [x] SkillBenchmark 메트릭 → Obsidian flush 구현 ✅ (커밋 `3d8813c`)
+      - `POST /api/skills/flush-all` 엔드포인트 추가
+      - Skills 페이지 💾 Obsidian 저장 버튼 UI 추가
+      - vitest 328/328 pass
 - [ ] Dashboard Tool Registry 페이지에 Skill 분류(capability/workflow) 표시
 - [x] MCP → 스킬 마이그레이션 (2026-03-04): `perplexity-ask` → disabled (tavily 대체), `agentation` → disabled (온디맨드), `brave-search` → 설정 제거
 
