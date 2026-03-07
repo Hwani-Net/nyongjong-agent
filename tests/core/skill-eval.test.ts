@@ -3,6 +3,7 @@ import {
   scanEvals,
   simulateEval,
   runComparison,
+  extractKeywordsFromSkillMd,
   type EvalCase,
 } from '../../src/core/skill-eval.js';
 import { SkillLifecycleManager } from '../../src/core/skill-lifecycle.js';
@@ -74,6 +75,44 @@ describe('SkillEval Framework', () => {
       expect(result).toHaveProperty('verdict');
       expect(result).toHaveProperty('reason');
       expect(['KEEP', 'RETIRE', 'REVIEW']).toContain(result.verdict);
+    });
+  });
+
+  describe('extractKeywordsFromSkillMd', () => {
+    it('should extract keywords from frontmatter description', () => {
+      const content = '---\nname: test-skill\ndescription: 코드 품질 분석 도구\ncategory: capability\n---\n# Test Skill';
+      const result = extractKeywordsFromSkillMd(content);
+      expect(result.name).toBe('test-skill');
+      expect(result.description).toBe('코드 품질 분석 도구');
+      expect(result.category).toBe('capability');
+      expect(result.keywords.length).toBeGreaterThanOrEqual(3);
+      expect(result.keywords.some(k => k === '코드' || k === '품질' || k === '분석' || k === '도구')).toBe(true);
+    });
+
+    it('should extract keywords from headings and bold text', () => {
+      const content = '---\nname: my-skill\n---\n# My Skill\n## 설치 방법\n**TypeScript** 프로젝트에서 사용\n## API 레퍼런스';
+      const result = extractKeywordsFromSkillMd(content);
+      expect(result.keywords.some(k => k === 'typescript' || k === '설치' || k === 'api')).toBe(true);
+    });
+
+    it('should return at least 3 keywords even with minimal content', () => {
+      const content = '# Simple';
+      const result = extractKeywordsFromSkillMd(content);
+      expect(result.keywords.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('should filter out stop words', () => {
+      const content = '---\ndescription: the best tool for all your needs\n---\n# Hello';
+      const result = extractKeywordsFromSkillMd(content);
+      expect(result.keywords).not.toContain('the');
+      expect(result.keywords).not.toContain('for');
+      expect(result.keywords).not.toContain('all');
+    });
+
+    it('should default to workflow category when not specified', () => {
+      const content = '---\nname: test\n---\n# Test';
+      const result = extractKeywordsFromSkillMd(content);
+      expect(result.category).toBe('workflow');
     });
   });
 });
@@ -151,12 +190,14 @@ describe('Dashboard Skill Actions', () => {
     expect(content).toContain('/reactivate');
   });
 
-  it('should have MCP actions for eval and retirement', async () => {
+  it('should have MCP actions for eval, retirement, and auto-generation', async () => {
     const fs = await import('fs/promises');
     const content = await fs.readFile('src/mcp-server.ts', 'utf-8');
     expect(content).toContain("'run_eval'");
     expect(content).toContain("'scan_evals'");
     expect(content).toContain("'retire'");
     expect(content).toContain("'reactivate'");
+    expect(content).toContain("'auto_generate_eval'");
+    expect(content).toContain("'bulk_generate_evals'");
   });
 });

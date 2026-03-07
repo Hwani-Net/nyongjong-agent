@@ -349,30 +349,230 @@ export async function runSkillEvalSuite(skillName: string): Promise<SkillEvalSum
   };
 }
 
-/**
- * Create a sample eval YAML for a skill (bootstrap helper).
- */
-export async function createSampleEval(skillName: string): Promise<string> {
-  const agentRoot = process.env['AGENT_ROOT'] || homedir();
-  const evalDir = resolve(agentRoot, '.agent', 'skills', skillName, 'eval');
+// ─── Stop words for keyword extraction ───
 
-  // Ensure eval/ directory exists
+const STOP_WORDS = new Set([
+  // English
+  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+  'should', 'may', 'might', 'shall', 'can', 'need', 'dare', 'ought',
+  'used', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from',
+  'as', 'into', 'through', 'during', 'before', 'after', 'above', 'below',
+  'and', 'but', 'or', 'nor', 'not', 'so', 'yet', 'both', 'either',
+  'neither', 'each', 'every', 'all', 'any', 'few', 'more', 'most',
+  'other', 'some', 'such', 'no', 'only', 'own', 'same', 'than', 'too',
+  'very', 'just', 'because', 'if', 'when', 'while', 'that', 'this',
+  'these', 'those', 'it', 'its', 'they', 'them', 'their', 'we', 'us',
+  'you', 'your', 'he', 'she', 'him', 'her', 'my', 'me', 'who', 'what',
+  'which', 'where', 'how', 'about', 'up', 'out', 'then', 'here', 'there',
+  // Korean particles/common
+  '을', '를', '이', '가', '에', '에서', '의', '로', '으로', '와', '과',
+  '도', '는', '은', '한', '하는', '된', '되는', '있는', '없는', '위한',
+  '통해', '대한', '및', '등', '때', '중', '후', '수', '것', '점',
+  // Generic skill words (not distinctive)
+  'skill', 'skills', 'use', 'using', 'used', 'file', 'files',
+  'example', 'note', 'important', 'optional', 'required',
+]);
+
+/**
+ * Extract meaningful keywords from SKILL.md content.
+ * Sources: frontmatter description, markdown headings, bold text, code identifiers.
+ */
+export function extractKeywordsFromSkillMd(content: string): {
+  keywords: string[];
+  description: string;
+  name: string;
+  category: 'capability' | 'workflow';
+} {
+  let description = '';
+  let name = '';
+  let category: 'capability' | 'workflow' = 'workflow';
+
+  // ── Parse frontmatter ──
+  const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (fmMatch) {
+    const fm = fmMatch[1];
+    const nameMatch = fm.match(/^name:\s*(.+)$/m);
+    const descMatch = fm.match(/^description:\s*(.+)$/m);
+    const catMatch = fm.match(/^category:\s*(.+)$/m);
+    if (nameMatch) name = nameMatch[1].trim().replace(/^['"]|['"]$/g, '');
+    if (descMatch) description = descMatch[1].trim().replace(/^['"]|['"]$/g, '');
+    if (catMatch) category = catMatch[1].trim().includes('capability') ? 'capability' : 'workflow';
+  }
+
+  const candidates = new Map<string, number>(); // word → score
+
+  const addWord = (word: string, score: number) => {
+    const w = word.toLowerCase().replace(/[^a-z0-9가-힣_-]/g, '').trim();
+    if (w.length < 2 || STOP_WORDS.has(w)) return;
+    candidates.set(w, (candidates.get(w) || 0) + score);
+  };
+
+  // ── Source 1: Description (highest weight) ──
+  if (description) {
+    for (const word of description.split(/[\s,;:()[\]{}|/]+/)) {
+      addWord(word, 5);
+    }
+  }
+
+  // ── Source 2: Markdown headings ──
+  const headings = content.match(/^#{1,3}\s+(.+)$/gm) || [];
+  for (const h of headings) {
+    const text = h.replace(/^#+\s+/, '');
+    for (const word of text.split(/[\s,;:()[\]{}|/]+/)) {
+      addWord(word, 3);
+    }
+  }
+
+  // ── Source 3: Bold text ──
+  const bolds = content.match(/\*\*([^*]+)\*\*/g) || [];
+  for (const b of bolds) {
+    const text = b.replace(/\*\*/g, '');
+    for (const word of text.split(/[\s,;:()[\]{}|/]+/)) {
+      addWord(word, 4);
+    }
+  }
+
+  // ── Source 4: Inline code ──
+  const codes = content.match(/`([^`]+)`/g) || [];
+  for (const c of codes) {
+    const text = c.replace(/`/g, '');
+    // Only short technical terms
+    if (text.length <= 30 && !text.includes(' ')) {
+      addWord(text, 2);
+    }
+  }
+
+  // ── Sort by score, take top 3-6 ──
+  const sorted = [...candidates.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([word]) => word);
+
+  // Ensure at least 3, at most 6
+  const keywords = sorted.slice(0, 6);
+  while (keywords.length < 3) {
+    keywords.push(keywords.length === 0 ? '결과' : keywords.length === 1 ? '완료' : '확인');
+  }
+
+  return { keywords, description, name, category };
+}
+
+/**
+ * Auto-generate a tailored eval YAML for a skill based on its SKILL.md content.
+ * Smarter than createSampleEval — extracts real keywords from the skill's documentation.
+ *
+ * @returns Object with path to created file, extracted keywords, skip status
+ */
+export async function autoGenerateEval(skillName: string): Promise<{
+  path: string;
+  keywords: string[];
+  prompt: string;
+  skipped: boolean;
+  reason?: string;
+}> {
+  const agentRoot = process.env['AGENT_ROOT'] || homedir();
+  const skillDir = resolve(agentRoot, '.agent', 'skills', skillName);
+  const evalDir = join(skillDir, 'eval');
+
+  // Check if eval already exists
+  try {
+    const entries = await readdir(evalDir);
+    if (entries.some(e => e.endsWith('.yaml') || e.endsWith('.yml'))) {
+      return { path: evalDir, keywords: [], prompt: '', skipped: true, reason: 'eval already exists' };
+    }
+  } catch {
+    // No eval dir — good, we'll create one
+  }
+
+  // Read SKILL.md
+  let skillContent: string;
+  try {
+    skillContent = await readFile(join(skillDir, 'SKILL.md'), 'utf-8');
+  } catch {
+    return { path: '', keywords: [], prompt: '', skipped: true, reason: 'SKILL.md not found' };
+  }
+
+  const { keywords, description, category } = extractKeywordsFromSkillMd(skillContent);
+
+  // Generate smart prompt based on description and category
+  const promptBase = description
+    ? `${skillName} 스킬을 사용해서 다음 작업을 수행해줘: ${description}`
+    : `${skillName} 스킬의 핵심 기능을 실행해줘`;
+
+  const prompt = category === 'capability'
+    ? promptBase + ' (기술적 정확성과 효율성을 중시)'
+    : promptBase + ' (절차와 체크리스트 준수를 중시)';
+
+  // Create eval directory and YAML
   const { mkdir } = await import('fs/promises');
   await mkdir(evalDir, { recursive: true });
 
-  const samplePath = join(evalDir, 'basic.yaml');
-  const sampleContent = [
+  const evalPath = join(evalDir, 'basic.yaml');
+  const yamlContent = [
     `name: basic-${skillName}-check`,
-    `prompt: "${skillName} 스킬을 사용해서 기본 작업을 수행해줘"`,
+    `prompt: "${prompt.replace(/"/g, '\\"')}"`,
     `expected_contains:`,
-    `  - "결과"`,
-    `  - "완료"`,
-    `max_tokens: 5000`,
+    ...keywords.map(k => `  - "${k}"`),
+    `max_tokens: ${category === 'capability' ? 4000 : 5000}`,
     `timeout_ms: 30000`,
     '',
   ].join('\n');
 
-  await writeFile(samplePath, sampleContent, 'utf-8');
-  log.info(`Sample eval created: ${samplePath}`);
-  return samplePath;
+  await writeFile(evalPath, yamlContent, 'utf-8');
+  log.info(`Auto-generated eval for ${skillName}: ${keywords.join(', ')}`);
+
+  return { path: evalPath, keywords, prompt, skipped: false };
+}
+
+/**
+ * Bulk-generate eval YAMLs for all skills that don't have one yet.
+ * Scans ~/.agent/skills/ and creates tailored eval for each.
+ */
+export async function bulkGenerateEvals(): Promise<{
+  generated: string[];
+  skipped: string[];
+  errors: Array<{ skill: string; error: string }>;
+}> {
+  const agentRoot = process.env['AGENT_ROOT'] || homedir();
+  const skillsDir = resolve(agentRoot, '.agent', 'skills');
+
+  const generated: string[] = [];
+  const skipped: string[] = [];
+  const errors: Array<{ skill: string; error: string }> = [];
+
+  try {
+    const entries = await readdir(skillsDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+
+      try {
+        const result = await autoGenerateEval(entry.name);
+        if (result.skipped) {
+          skipped.push(entry.name);
+        } else {
+          generated.push(entry.name);
+        }
+      } catch (err) {
+        errors.push({
+          skill: entry.name,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  } catch {
+    log.error(`Cannot read skills directory: ${skillsDir}`);
+  }
+
+  log.info(`Bulk eval generation: ${generated.length} generated, ${skipped.length} skipped, ${errors.length} errors`);
+  return { generated, skipped, errors };
+}
+
+/**
+ * Create a sample eval YAML for a skill (legacy bootstrap helper).
+ * @deprecated Use autoGenerateEval() instead for keyword-aware generation.
+ */
+export async function createSampleEval(skillName: string): Promise<string> {
+  const result = await autoGenerateEval(skillName);
+  return result.path;
 }

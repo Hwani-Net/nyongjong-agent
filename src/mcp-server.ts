@@ -1370,7 +1370,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     'skill_benchmark',
     'A/B benchmark: compare skill effectiveness with metrics, eval framework, retirement',
     {
-      action: z.enum(['start_baseline', 'end_with_skill', 'get_stats', 'summary', 'flush', 'flush_all', 'run_eval', 'scan_evals', 'retire', 'reactivate']).describe('Benchmark action'),
+      action: z.enum(['start_baseline', 'end_with_skill', 'get_stats', 'summary', 'flush', 'flush_all', 'run_eval', 'scan_evals', 'retire', 'reactivate', 'auto_generate_eval', 'bulk_generate_evals']).describe('Benchmark action'),
       skillName: z.string().optional().describe('Skill name (required for most actions)'),
       sessionId: z.string().optional().describe('Session ID from start_baseline (required for end_with_skill)'),
       tokens: z.number().optional().describe('Token count for this measurement'),
@@ -1511,8 +1511,28 @@ export function createMcpServer(options: McpServerOptions): McpServer {
           return { content: [{ type: 'text' as const, text: reactivateResult.message }] };
         }
 
+        case 'auto_generate_eval': {
+          if (!params.skillName) {
+            return { content: [{ type: 'text' as const, text: '❌ skillName is required for auto_generate_eval' }] };
+          }
+          const { autoGenerateEval } = await import('./core/skill-eval.js');
+          const autoResult = await autoGenerateEval(params.skillName);
+          if (autoResult.skipped) {
+            return { content: [{ type: 'text' as const, text: `⏭️ "${params.skillName}" — 스킵: ${autoResult.reason}` }] };
+          }
+          return { content: [{ type: 'text' as const, text: `✅ eval 자동 생성 완료\n\n📄 경로: \`${autoResult.path}\`\n🔑 키워드: ${autoResult.keywords.join(', ')}\n📝 프롬프트: ${autoResult.prompt.slice(0, 100)}...` }] };
+        }
+
+        case 'bulk_generate_evals': {
+          const { bulkGenerateEvals } = await import('./core/skill-eval.js');
+          const bulkResult = await bulkGenerateEvals();
+          const genList = bulkResult.generated.length > 0 ? bulkResult.generated.map(s => `- ✅ ${s}`).join('\n') : '없음';
+          const errList = bulkResult.errors.length > 0 ? bulkResult.errors.map(e => `- ❌ ${e.skill}: ${e.error}`).join('\n') : '없음';
+          return { content: [{ type: 'text' as const, text: `## 📦 Eval 일괄 생성 결과\n\n**생성**: ${bulkResult.generated.length}개\n**스킵** (이미 있음): ${bulkResult.skipped.length}개\n**에러**: ${bulkResult.errors.length}개\n\n### 생성된 스킬\n${genList}\n\n### 에러\n${errList}` }] };
+        }
+
         default:
-          return { content: [{ type: 'text' as const, text: '❌ Unknown action. Use: start_baseline, end_with_skill, get_stats, summary, flush, flush_all, run_eval, scan_evals, retire, reactivate' }] };
+          return { content: [{ type: 'text' as const, text: '❌ Unknown action. Use: start_baseline, end_with_skill, get_stats, summary, flush, flush_all, run_eval, scan_evals, retire, reactivate, auto_generate_eval, bulk_generate_evals' }] };
       }
     },
   );
