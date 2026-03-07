@@ -1721,9 +1721,9 @@ function renderSkillCards(skills) {
       '<div class="skill-card-meta">' + catBadge + retireBadge + verdictBadge + '</div>' +
       '<div class="skill-card-meta" style="margin-top:0.25rem">마지막: ' + lastUsed + ' · ' + usageText + '</div>' +
       '<div class="skill-card-actions">' +
-        '<button onclick="runSkillEval(\'' + s.name + '\')" title="Eval ON/OFF 비교 실행">🧪 Eval</button>' +
-        '<button onclick="retireSkill(\'' + s.name + '\')" title="스킬 은퇴 처리">🔴 은퇴</button>' +
-        '<button onclick="reactivateSkill(\'' + s.name + '\')" title="은퇴 스킬 복구">♻️ 복구</button>' +
+        '<button onclick="runSkillEval(\u0026apos;' + s.name + '\u0026apos;)" title="Eval ON/OFF 비교 실행">🧪 Eval</button>' +
+        '<button onclick="retireSkill(\u0026apos;' + s.name + '\u0026apos;)" title="스킬 은퇴 처리">🔴 은퇴</button>' +
+        '<button onclick="reactivateSkill(\u0026apos;' + s.name + '\u0026apos;)" title="은퇴 스킬 복구">♻️ 복구</button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -1805,9 +1805,26 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
       sseClients.add(res);
       req.on('close', () => sseClients.delete(res));
 
+      // Send immediate keepalive ping to trigger EventSource onopen
+      res.write(`data: ${JSON.stringify({ type: 'ping', ts: Date.now() })}\n\n`);
+
       // Send initial status with tool groups
-      const status = await getAgentStatus(modules, config);
-      res.write(`data: ${JSON.stringify(status)}\n\n`);
+      try {
+        const status = await getAgentStatus(modules, config);
+        res.write(`data: ${JSON.stringify(status)}\n\n`);
+      } catch (err) {
+        log.warn('SSE initial status error (non-fatal)', err);
+      }
+
+      // Per-client keepalive interval (30s) to prevent timeout
+      const keepalive = setInterval(() => {
+        try {
+          res.write(`data: ${JSON.stringify({ type: 'ping', ts: Date.now() })}\n\n`);
+        } catch {
+          clearInterval(keepalive);
+        }
+      }, 30_000);
+      req.on('close', () => clearInterval(keepalive));
       return;
     }
 
@@ -2016,6 +2033,37 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
       try {
         const { runSkillEvalSuite } = await import('../core/skill-eval.js');
         const summary = await runSkillEvalSuite(skillName);
+
+        // Auto-flush eval results to Obsidian
+        try {
+          const ts = new Date().toISOString().slice(0, 10);
+          const evalNotePath = `뇽죵이Agent/eval-results/${skillName}-${ts}.md`;
+          const evalNote = [
+            `---`,
+            `date: ${ts}`,
+            `skill: ${skillName}`,
+            `verdict: ${summary.overallVerdict}`,
+            `retirementSignal: ${summary.retirementSignal}`,
+            `totalEvals: ${summary.totalEvals}`,
+            `---`,
+            `# Eval: ${skillName}`,
+            ``,
+            `**Verdict**: ${summary.overallVerdict} | **Retirement Signal**: ${summary.retirementSignal}`,
+            ``,
+            `## Comparisons`,
+            ...summary.comparisons.map(c =>
+              `- **${c.evalName}**: ${c.verdict} — with: ${c.withSkillResult.passed ? '✅' : '❌'}, without: ${c.withoutSkillResult.passed ? '✅' : '❌'}`
+            ),
+            ``,
+            `## Report`,
+            summary.report,
+          ].join('\n');
+          await modules.store.writeNote(evalNotePath, evalNote, { skill: skillName, verdict: summary.overallVerdict });
+          log.info(`Eval results flushed to Obsidian: ${evalNotePath}`);
+        } catch (flushErr) {
+          log.warn('Eval Obsidian flush failed (non-fatal)', flushErr);
+        }
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           ok: true,
@@ -2263,17 +2311,27 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
     res.end(DASHBOARD_HTML);
   });
 
-  // Periodic SSE broadcast
+  // Periodic SSE broadcast — resilient per-client writes
   setInterval(async () => {
     if (sseClients.size === 0) return;
     try {
       const status = await getAgentStatus(modules, config);
       const data = `data: ${JSON.stringify(status)}\n\n`;
       for (const client of sseClients) {
-        client.write(data);
+        try {
+          client.write(data);
+        } catch {
+          // Dead client — remove silently
+          sseClients.delete(client);
+        }
       }
     } catch (err) {
-      log.warn('SSE broadcast error', err);
+      // getAgentStatus failed — send ping to keep connections alive
+      log.warn('SSE broadcast error (sending ping instead)', err);
+      const ping = `data: ${JSON.stringify({ type: 'ping', ts: Date.now() })}\n\n`;
+      for (const client of sseClients) {
+        try { client.write(ping); } catch { sseClients.delete(client); }
+      }
     }
   }, 10_000); // 10s — persona(30s TTL cached) + ollama(30s TTL cached); no need for 5s
 
