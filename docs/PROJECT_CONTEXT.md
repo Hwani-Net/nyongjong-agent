@@ -8,10 +8,10 @@
 | 항목 | 값 |
 |------|-----|
 | **이름** | `nyongjong-agent` |
-| **버전** | `0.7.1` |
+| **버전** | `0.7.3` |
 | **경로** | `E:\Agent\뇽죵이Agent` |
 | **런타임** | Node.js ≥22, TypeScript, ESM |
-| **테스트** | vitest — **347/347 pass** (25 파일) |
+| **테스트** | vitest — **352/352 pass** (25 파일) |
 | **MCP 도구** | **33개** (core 3 + toggle 28 + lifecycle 2) |
 | **프로토콜** | Model Context Protocol (stdio) |
 | **GitHub** | https://github.com/Hwani-Net/nyongjong-agent |
@@ -38,7 +38,7 @@ src/
 
 ## 📊 현재 진행 상태
 
-### Phase: v0.7.1 릴리스 완료 ✅
+### Phase: v0.7.3 릴리스 완료 ✅
 
 - [x] Phase 0.1: 초기 설정 (MCP + vitest)
 - [x] Phase 0.2: Obsidian + Task Manager
@@ -51,7 +51,7 @@ src/
 - [x] ObsidianStore REST API 전환 완료
 - [x] `docs/` 레거시 5파일 아카이브 → `docs/archive/`
 
-### Phase: v0.7.0 → v0.7.1 완료 ✅ (2026-03-06)
+### Phase: v0.7.0 → v0.7.3 완료 ✅ (2026-03-06 ~ 2026-03-07)
 
 - [x] Phase 0.7: **Skills 2.0** — SkillLifecycleManager + SkillBenchmark A/B 엔진
   - [x] `src/core/skill-lifecycle.ts` [NEW] — capability/workflow 이원화, 사용량 추적, 은퇴 후보 식별
@@ -69,6 +69,7 @@ src/
 - [ ] npm Token 갱신 필요일: **2026-06-02** (Granular Token 90일 만료)
 - [ ] Dashboard Stitch 페이지에 라이브 데이터 연동 (실시간 포럼 모니터링)
 - [ ] GEMINI.md 다이어트 (572줄 → 축소)
+- [ ] npm publish v0.7.3
 - [x] SkillBenchmark 메트릭 → Obsidian flush 구현 ✅ (커밋 `3d8813c`)
       - `POST /api/skills/flush-all` 엔드포인트 추가
       - Skills 페이지 💾 Obsidian 저장 버튼 UI 추가
@@ -76,6 +77,11 @@ src/
 - [x] Dashboard Tool Registry 페이지에 Skill 분류(capability/workflow) 표시 ✅ (커밋 `6469c88`)
       - `lifecycle` 그룹 하단 인라인 badge, 상단 요약 KPI
 - [x] MCP → 스킬 마이그레이션 (2026-03-04): `perplexity-ask` → disabled (tavily 대체), `agentation` → disabled (온디맨드), `brave-search` → 설정 제거
+- [x] **Eval Framework 완성** ✅ (2026-03-07, 커밋 `2f2806d`, `195bd17`)
+      - 52개 스킬 eval YAML 생성 + bulk runner 스크립트
+      - KEEP:52 / RETIRE:0 / REVIEW:0 달성
+      - Dashboard SSE "Connecting..." 버그 근본 수정 (onclick `\\'` → `&apos;`)
+      - obsidian-writing eval 오탐 수정 (workflow 스킬 → 은퇴 대상 아님 확인)
 
 ## 🔧 ADR (Architecture Decision Records)
 

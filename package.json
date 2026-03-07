@@ -1,6 +1,6 @@
 {
   "name": "nyongjong-agent",
-  "version": "0.7.1",
+  "version": "0.7.3",
   "description": "뇽죵이 에이전트 — AI-native autonomous agent server with MCP protocol, Obsidian memory, multi-model support, and dynamic persona system",
   "type": "module",
   "main": "dist/index.js",

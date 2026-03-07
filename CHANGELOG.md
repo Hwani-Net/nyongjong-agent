@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.3] - 2026-03-07
+
+### 🔬 Eval Framework 완성 — 52개 스킬 전수 검사
+
+**352/352 unit tests (25 files), 0 defects**
+
+Dashboard SSE 버그 수정 + Eval auto-generation + 52개 스킬 일괄 평가 완료.
+
+### Added
+- **`src/core/skill-eval.ts`** — Auto-generation 기능 추가
+  - `extractKeywordsFromSkillMd()` — SKILL.md에서 키워드 자동 추출 (가중치: frontmatter 5, bold 4, heading 3, code 2)
+  - `autoGenerateEval()` — SKILL.md 키워드 기반 tailored eval YAML 자동 생성
+  - `bulkGenerateEvals()` — 미보유 스킬 전체 일괄 생성
+- **`scripts/bulk-run-evals.ts`** — 52개 스킬 eval 일괄 실행 스크립트
+  - KEEP/RETIRE/REVIEW 판정 집계 + Markdown 결과 파일 저장
+- **`eval-results/`** — 스킬별 eval 결과 아카이브 (3회 실행)
+- **42개 eval YAML** — 신규 생성 (`.agent/skills/*/eval/basic.yaml`)
+- **11개 eval YAML** — 키워드 개선 (false REVIEW 오탐 수정)
+  - DEPRECATED 스킬(`devil-*`) → 폐기 확인 테스트로 교체
+  - 일반 키워드 → 스킬 고유 동작 키워드 (e.g. `#AI-Written`, `e2e-test.mjs`, `get_screen_code`)
+
+### Fixed
+- **Dashboard SSE "Connecting..." 버그** — `renderSkillCards` onclick의 `\\'` → `&apos;` 교체 (전체 인라인 스크립트 SyntaxError 방지)
+- **SSE 강화** — 즉시 ping + 30s keepalive + resilient per-client broadcast + getAgentStatus 에러 시 ping fallback
+- **Eval → Obsidian auto-flush** — `/api/skills/:name/eval` 결과를 `뇽죵이Agent/eval-results/{skill}-{date}.md`로 자동 저장
+
+### Eval 전수 검사 결과 (2026-03-07 최종)
+| 판정 | 개수 |
+|------|------|
+| ✅ KEEP | **52** |
+| 🔴 RETIRE | **0** |
+| 🟡 REVIEW | **0** |
+
+### Changed
+- Unit tests: 347 → **352** (+5 tests for auto-generation functions)
+- Version bump: 0.7.2 → **0.7.3**
+
 ## [0.7.1] - 2026-03-06
 
 ### 🔍 Skills 2.0 — Lifecycle Management + A/B Benchmarking
