@@ -197,6 +197,15 @@ export class CycleRunner {
             analysis: this.state.understanding,
             projectContext: input.projectContext,
             simulator: ollamaOk2 ? this.options.personaSimulator : undefined,
+            // ADR-011: Inject Gate 0 business constraints into PRD generation
+            businessConstraints: this.state.businessGate
+              ? [
+                  `Gate 0 판정: ${this.state.businessGate.verdict}`,
+                  ...(this.state.businessGate.reason ? [`사유: ${this.state.businessGate.reason}`] : []),
+                  ...(this.state.businessGate.pivotSuggestion ? [`피봇 제안: ${this.state.businessGate.pivotSuggestion}`] : []),
+                  ...this.state.businessGate.reviews.map(r => `${r.personaName}: ${r.feedback.slice(0, 100)}`),
+                ]
+              : undefined,
           },
           this.options.personaEngine,
         );
@@ -424,6 +433,57 @@ export class CycleRunner {
       log.info(`Workflow state persisted to ${path}`);
     } catch (err) {
       log.warn('Failed to persist workflow state (non-fatal)', err);
+    }
+  }
+
+  /**
+   * ADR-011: Restore workflow state from Obsidian vault.
+   * Checks if a previous run for the same goal exists and returns the last completed stage.
+   * Returns null if no prior state found (fresh run).
+   */
+  async restoreWorkflowState(goal: string): Promise<{ lastStage: string; completedStages: string[] } | null> {
+    if (!this.options.obsidianStore) {
+      return null;
+    }
+
+    try {
+      const slug = goal
+        .toLowerCase()
+        .replace(/[^a-z0-9가-힣\s]/g, '')
+        .replace(/\s+/g, '-')
+        .slice(0, 60);
+
+      const path = `뇽죵이Agent/workflow_state/${slug}.md`;
+      const note = await this.options.obsidianStore.readNote(path);
+
+      if (!note || !note.content) {
+        log.debug('No prior workflow state found');
+        return null;
+      }
+
+      // Parse completed stages from frontmatter or content — with runtime validation
+      const fm = note.frontmatter as Record<string, unknown> | undefined;
+      const rawStages = fm?.completedStages;
+      const completedStages: string[] = Array.isArray(rawStages)
+        ? rawStages.filter((s): s is string => typeof s === 'string')
+        : [];
+      const status = typeof fm?.status === 'string' ? fm.status : 'unknown';
+
+      if (completedStages.length === 0) {
+        log.debug('Prior workflow state found but no completed stages');
+        return null;
+      }
+
+      const lastStage = completedStages[completedStages.length - 1];
+      log.info(`ADR-011: Restored workflow state — last stage: ${lastStage}, status: ${status}`, {
+        completedStages,
+      });
+
+      return { lastStage, completedStages };
+    } catch (err) {
+      // File not found is expected for fresh runs
+      log.debug('Workflow state restore attempt failed (expected for new goals)', err);
+      return null;
     }
   }
 }

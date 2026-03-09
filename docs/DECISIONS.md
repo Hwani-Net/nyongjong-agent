@@ -4,6 +4,25 @@
 
 ---
 
+## ADR-011: Workflow Pipeline Hard-Links (2026-03-10)
+
+### 컨텍스트
+세션 핸드오프 문제 해결 후 동일한 패턴의 "연결고리 부재(Missing Link)"가 3건 발견됨. ADR-008(Design Dictatorship)과 동일한 교훈: "AI의 자율에 의존하면 데이터가 왜곡된다."
+
+### 결정
+워크플로우 파이프라인의 3개 단절점에 강제 연결(Hard-Link) 적용:
+1. **Gate Context Pipe**: Gate 0(business) 결과를 Gate 1(PRD) 입력에 강제 주입. `PRDElicitationInput`에 `businessConstraints` 필드 추가.
+2. **PRD Auto-Persist**: `prd_elicit` 완료 시 Obsidian에 PRD 구조체를 JSON+MD로 자동 저장. Antigravity의 "요약"에 의존하지 않음.
+3. **State Hydration**: `run_cycle`에 `resumeGoal` 파라미터 추가. Obsidian `workflow_state/` 파일에서 이전 상태 복원하여 멈춘 Stage부터 재개.
+
+### 결과
+- `PRDElicitationInput` 인터페이스 확장
+- `CycleRunner`에 Gate 0 → Gate 1 데이터 파이프라인 추가
+- `prd_elicit` 핸들러에 `store.writeNote()` 자동 호출 추가
+- `CycleRunner.restoreWorkflowState()` 구현
+
+---
+
 ## ADR-010: Council + 팀장 통합 외부 LLM 바인딩 (2026-03-09)
 
 ### 컨텍스트

@@ -751,6 +751,66 @@ export function createMcpServer(options: McpServerOptions): McpServer {
         ts: Date.now(),
       });
 
+      // ── ADR-011: PRD Auto-Persist to Obsidian ──
+      // Force-save the PRD document so it survives session boundaries.
+      // Do NOT rely on Antigravity to summarize and save — data loss occurs.
+      try {
+        const prdSlug = params.goal
+          .toLowerCase()
+          .replace(/[^a-z0-9가-힣\s]/g, '')
+          .replace(/\s+/g, '-')
+          .slice(0, 50);
+        const prdPath = `뇽죵이Agent/prd/${prdSlug}-v${result.prd.version}.md`;
+        const prdContent = [
+          `# PRD: ${params.goal.slice(0, 80)}`,
+          '',
+          `- **Version**: ${result.prd.version}`,
+          `- **Rounds**: ${result.rounds}`,
+          `- **All Satisfied**: ${result.allSatisfied}`,
+          `- **Generated**: ${new Date().toISOString()}`,
+          '',
+          '## 맥락 (Context)',
+          result.prd.context,
+          '',
+          '## 범위 (Scope)',
+          ...result.prd.scope.map(s => `- ${s}`),
+          '',
+          '## 비목표 (Non-Goals)',
+          ...result.prd.nonGoals.map(n => `- ${n}`),
+          '',
+          '## 필수 (MUST)',
+          ...result.prd.mustHave.map(m => `- ${m}`),
+          '',
+          '## 권장 (SHOULD)',
+          ...result.prd.shouldHave.map(s => `- ${s}`),
+          '',
+          '## 금지 (MUST NOT)',
+          ...result.prd.mustNot.map(m => `- ${m}`),
+          '',
+          '## 성공 기준',
+          ...result.prd.successCriteria.map(c => `- ${c}`),
+          '',
+          '## 리스크',
+          ...result.prd.risks.map(r => `- ${r}`),
+          '',
+          '## 심사 결과',
+          ...result.verdicts.map(v =>
+            `- **${v.personaName}** (${v.verdict}): blockers=[${v.blockers.join(', ')}], wishes=[${v.wishes.join(', ')}]`
+          ),
+        ].join('\n');
+
+        await store.writeNote(prdPath, prdContent, {
+          type: 'prd',
+          goal: params.goal.slice(0, 120),
+          version: result.prd.version,
+          allSatisfied: result.allSatisfied,
+          rounds: result.rounds,
+        });
+        log.info(`ADR-011: PRD auto-persisted to ${prdPath}`);
+      } catch (persistErr) {
+        log.warn('ADR-011: PRD auto-persist failed (non-fatal)', persistErr as Error);
+      }
+
       return { content: [{ type: 'text' as const, text: result.report }] };
     },
   );
@@ -810,13 +870,21 @@ export function createMcpServer(options: McpServerOptions): McpServer {
         },
       });
 
+      // ADR-011: Check for prior workflow state before starting fresh
+      const priorState = await runner.restoreWorkflowState(params.goal);
+      let stateNote = '';
+      if (priorState) {
+        stateNote = `\n\n> ℹ️ **이전 실행 기록 발견**: ${priorState.completedStages.join(' → ')} (마지막: ${priorState.lastStage})\n> 현재는 처음부터 재실행합니다. 향후 버전에서 중단점 재개 지원 예정.\n`;
+        log.info('ADR-011: Prior workflow state found', priorState);
+      }
+
       const report = await runner.run({
         goal: params.goal,
         projectContext: params.projectContext,
         skipGates: params.skipGates,
         forceGates: params.forceGates,
       });
-      return { content: [{ type: 'text' as const, text: report.markdown }] };
+      return { content: [{ type: 'text' as const, text: stateNote + report.markdown }] };
     },
   );
 

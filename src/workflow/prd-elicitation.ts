@@ -65,6 +65,8 @@ export interface PRDElicitationInput {
   projectContext?: string;
   /** Optional PersonaSimulator for LLM-based customer reviews */
   simulator?: PersonaSimulator;
+  /** ADR-011: Business constraints from Gate 0 (injected automatically by CycleRunner) */
+  businessConstraints?: string[];
 }
 
 // ─── Customer persona IDs for PRD review ───
@@ -87,11 +89,11 @@ export async function runPRDElicitation(
   input: PRDElicitationInput,
   personaEngine: PersonaEngine,
 ): Promise<PRDElicitationResult> {
-  const { goal, analysis, maxRounds = 3, projectContext, simulator } = input;
+  const { goal, analysis, maxRounds = 3, projectContext, simulator, businessConstraints } = input;
   log.info('Starting PRD elicitation', { goal: goal.slice(0, 80), maxRounds });
 
-  // Phase 1: Generate initial PRD
-  let prd = generateInitialPRD(goal, analysis, projectContext);
+  // Phase 1: Generate initial PRD (ADR-011: inject business constraints)
+  let prd = generateInitialPRD(goal, analysis, projectContext, businessConstraints);
   log.info('Initial PRD generated', { version: prd.version });
 
   let verdicts: CustomerVerdict[] = [];
@@ -144,13 +146,18 @@ export function generateInitialPRD(
   goal: string,
   analysis: UnderstandOutput,
   projectContext?: string,
+  businessConstraints?: string[],
 ): PRDDocument {
   const { taskType, complexity, scope, keyRequirements, risks } = analysis.analysis;
 
-  // Build context
-  const context = projectContext
+  // Build context (ADR-011: include business gate constraints if present)
+  let context = projectContext
     ? `${goal}\n\n프로젝트 컨텍스트: ${projectContext}`
     : goal;
+
+  if (businessConstraints && businessConstraints.length > 0) {
+    context += `\n\n비즈니스 Gate 제약사항:\n${businessConstraints.map(c => `- ${c}`).join('\n')}`;
+  }
 
   // Convert keyRequirements to mustHave
   const mustHave = keyRequirements.map(r => r);
@@ -164,8 +171,15 @@ export function generateInitialPRD(
   // Generate success criteria
   const successCriteria = generateSuccessCriteria(taskType, keyRequirements);
 
-  // Generate must-not constraints
+  // Generate must-not constraints (ADR-011: merge business constraints)
   const mustNot = generateMustNots(taskType, risks);
+  if (businessConstraints) {
+    for (const constraint of businessConstraints) {
+      if (!mustNot.includes(constraint)) {
+        mustNot.push(constraint);
+      }
+    }
+  }
 
   return {
     context,
