@@ -12,7 +12,7 @@
 | **경로** | `E:\Agent\뇽죵이Agent` |
 | **런타임** | Node.js ≥22, TypeScript, ESM |
 | **테스트** | vitest — **369/369 pass** (26 파일) |
-| **MCP 도구** | **35개** (core 3 + toggle 30 + lifecycle 2) |
+| **MCP 도구** | **34개** (core 3 + toggle 29 + lifecycle 2) |
 | **프로토콜** | Model Context Protocol (stdio) |
 | **GitHub** | https://github.com/Hwani-Net/nyongjong-agent |
 | **npm** | https://www.npmjs.com/package/nyongjong-agent |
@@ -39,7 +39,7 @@ src/
 
 ## 📊 현재 진행 상태
 
-### Phase: v0.7.3 릴리스 완료 ✅
+### Phase: v0.7.3 릴리스 완료 ✅ (2026-03-07)
 
 - [x] Phase 0.1: 초기 설정 (MCP + vitest)
 - [x] Phase 0.2: Obsidian + Task Manager
@@ -52,18 +52,18 @@ src/
 - [x] ObsidianStore REST API 전환 완료
 - [x] `docs/` 레거시 5파일 아카이브 → `docs/archive/`
 
-### Phase: v0.7.X 릴리스 준비 ✅ (2026-03-09 ~ 진행중)
+### Phase: v0.7.X 릴리스 준비 ✅ (2026-03-09 완료)
 
 - [x] 워크플로우 분석.md, 자율.md에 `persona_generate` 선행 조건 수동 매핑 추가 (GAP 1)
 - [x] 워크플로우 수정.md에 `mcp_nongjong-agent_feedback_classify` 피드백 분류 추가 (GAP 3)
 - [x] **`stitch_design_audit`** 도구 개발 (ADR-008 준수: Approximation 감지, DOM / Effect 유지 확인) (GAP 2)
   - [x] `auditDesignCompliance` 모듈 및 16개 테스트 케이스 구현 완료
   - [x] `tests/stitch/stitch-design-audit.test.ts` (100% 통과)
-  - [x] `mcp-server.ts` 등록 (도구 35개)
+  - [x] `mcp-server.ts` 등록 (도구 34개)
 - [x] **NotebookLM(NLM) Fact-Only 지식 저장소 통합**
   - [x] 조사, 분석, 자율, 기획 워크플로우 전반에 걸쳐 NLM을 기본 RAG 파이프라인으로 강제
   - [x] 할루시네이션 방지: AI가 생성한 요약 대신 원본 URL과 텍스트만을 Source로 추가하고 질의
-- [ ] npm 패키지 버전 범프 및 배포 (`v0.7.4` 또는 `v0.7.5`)
+- [x] npm 패키지 배포 (`v0.7.4` 게시 완료 ✅)
 
 ### Phase: v0.7.0 → v0.7.3 완료 ✅ (2026-03-06 ~ 2026-03-07)
 
@@ -83,7 +83,9 @@ src/
 - [ ] npm Token 갱신 필요일: **2026-06-02** (Granular Token 90일 만료)
 - [ ] Dashboard Stitch 페이지에 라이브 데이터 연동 (실시간 포럼 모니터링)
 - [ ] GEMINI.md 다이어트 (572줄 → 축소)
-- [ ] npm publish v0.7.3
+- [ ] 비즈니스 도메인 페르소나 추가 (프랜차이즈/부동산/SaaS/법률)
+- [x] npm publish v0.7.3 ✅
+- [x] npm publish v0.7.4 ✅
 - [x] SkillBenchmark 메트릭 → Obsidian flush 구현 ✅ (커밋 `3d8813c`)
       - `POST /api/skills/flush-all` 엔드포인트 추가
       - Skills 페이지 💾 Obsidian 저장 버튼 UI 추가
@@ -102,9 +104,9 @@ src/
 - [x] **디자인 스킬 통합** ✅ — 구 스킬 5개 삭제, `stitch-pencil-pipeline` 마스터 파이프라인 유지
 - [x] **Git pre-commit hook** ✅ — tsc 타입체크 + 시크릿 패턴 필터 (ADR-003 이행)
 - [x] **GitHub Actions CI** ✅ — push/PR 시 tsc + vitest + build 자동 실행 (커밋 `077ff07`)
-- [ ] `SKILL_CATALOG.md` 61개 → 최정예 재분류 최종 확정
+- [x] `SKILL_CATALOG.md` 51개 최정예 재분류 최종 확정 ✅ (2026-03-10)
 
-### Phase: v0.7.4 진행 중 (2026-03-10)
+### Phase: v0.7.4 완료 ✅ (2026-03-10)
 
 - [x] **LLM Router** (`src/core/llm-router.ts`) — Council(5인)/팀장(1인) 통합 외부 LLM 바인딩 레이어
   - [x] 3개 프로바이더: OpenAI GPT-4o, Ollama Cloud (DeepSeek-V3.1:671b), Ollama Local (Qwen3:30b)
@@ -113,6 +115,11 @@ src/
 - [x] **`external_review` MCP 도구** — council / team_lead / custom 3모드
 - [x] `tests/core/llm-router.test.ts` — 17 tests, tsc clean, 369/369 pass
 - [x] **ADR-010 추가** → `DECISIONS.md`
+- [x] **npm publish v0.7.4** ✅
+- [x] `SKILL_CATALOG.md` 최종 완성 (실제 폴더 검증, 51개 활성 자산)
+- [x] `stitch_design_audit` MCP E2E 검증 완료
+- [x] Obsidian 의료 페르소나 3개 정리 (health-compliance/elderly/nurse 삭제)
+- [x] `docs/DECISIONS.md` 생성 — ADR-001~010 전체 기록 (커밋 `bfc321f`)
 
 ## 🔧 ADR (Architecture Decision Records)
 
@@ -150,4 +157,5 @@ src/
 ## 🔒 시스템 강제 게이트
 - **Git pre-commit hook** (`.git/hooks/pre-commit`): tsc 타입체크 + 시크릿 패턴 필터
 - **GitHub Actions CI** (`.github/workflows/ci.yml`): push/pull_request 시 tsc, vitest, build 강제 검증 자동화
-- **SKILL_CATALOG.md**: 61개 활성 자산 카탈로그 (ADR-007 기반)
+- **SKILL_CATALOG.md**: 51개 활성 자산 카탈로그 (ADR-007 기반, 2026-03-10 최종 검증)
+- **DECISIONS.md**: ADR-001~010 아키텍처 결정 기록 (축약 금지 원칙)
