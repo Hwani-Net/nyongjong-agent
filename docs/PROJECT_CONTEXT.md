@@ -11,7 +11,7 @@
 | **버전** | `0.7.4` |
 | **경로** | `E:\Agent\뇽죵이Agent` |
 | **런타임** | Node.js ≥22, TypeScript, ESM |
-| **테스트** | vitest — **369/369 pass** (26 파일) |
+| **테스트** | vitest — **395/395 pass** (27 파일) |
 | **MCP 도구** | **34개** (core 3 + toggle 29 + lifecycle 2) |
 | **프로토콜** | Model Context Protocol (stdio) |
 | **GitHub** | https://github.com/Hwani-Net/nyongjong-agent |
@@ -128,6 +128,7 @@ src/
   - [x] PRD 자동 영속화: `prd_elicit` 완료 시 Obsidian `뇽죵이Agent/prd/` 자동 저장
   - [x] CycleRunner 상태 복원: `restoreWorkflowState()` 구현 + `run_cycle` 호출 시 이전 상태 확인
   - [x] 팀장 외부 검수 PASS (DeepSeek)
+  - [x] 유닛 테스트 15건 추가 (커밋 `9ceffe5`) — 395/395 pass
 - [ ] 비즈니스 도메인 페르소나 추가 (프랜차이즈/부동산/SaaS/법률)
 - [ ] GEMINI.md 다이어트 (572줄 → 축소)
 
