@@ -8,11 +8,11 @@
 | 항목 | 값 |
 |------|-----|
 | **이름** | `nyongjong-agent` |
-| **버전** | `0.7.4` |
+| **버전** | `0.7.5` |
 | **경로** | `E:\Agent\뇽죵이Agent` |
 | **런타임** | Node.js ≥22, TypeScript, ESM |
-| **테스트** | vitest — **395/395 pass** (27 파일) |
-| **MCP 도구** | **34개** (core 3 + toggle 29 + lifecycle 2) |
+| **테스트** | vitest — **413/413 pass** (28 파일) |
+| **MCP 도구** | **35개** (core 3 + toggle 30 + lifecycle 2) |
 | **프로토콜** | Model Context Protocol (stdio) |
 | **GitHub** | https://github.com/Hwani-Net/nyongjong-agent |
 | **npm** | https://www.npmjs.com/package/nyongjong-agent |
@@ -86,6 +86,7 @@ src/
 - [ ] 비즈니스 도메인 페르소나 추가 (프랜차이즈/부동산/SaaS/법률)
 - [x] npm publish v0.7.3 ✅
 - [x] npm publish v0.7.4 ✅
+- [x] npm publish v0.7.5 ✅
 - [x] SkillBenchmark 메트릭 → Obsidian flush 구현 ✅ (커밋 `3d8813c`)
       - `POST /api/skills/flush-all` 엔드포인트 추가
       - Skills 페이지 💾 Obsidian 저장 버튼 UI 추가
@@ -134,8 +135,11 @@ src/
   - [x] `SKILL_CATALOG.md`에 nlm-skill "조사·분석 필수" 등록
   - [x] `nlm-skill/SKILL.md` v0.4.4 반영 (cited_text, cited_table, cinematic, 파일포맷, bulk sharing, setup all, mind map JSON)
   - [x] `/조사` NLM 파이프라인 검증 — 3소스 적재 + cited_text 응답 확인 (alias: `nlm04x`)
-- [ ] 비즈니스 도메인 페르소나 추가 (프랜차이즈/부동산/SaaS/법률)
-- [ ] `npm version patch` → v0.7.5 배포
+- [x] 비즈니스 도메인 페르소나 추가 (프랜차이즈/부동산/SaaS/법률) ✅
+  - [x] 4개 도메인 키워드 패턴 + 12개 페르소나 템플릿 (커밋 `76c2ca7`)
+  - [x] 2개 역할 카드 추가 (민지: 프랜차이즈 규제 자문, 선우: 법무 리스크 관리자)
+  - [x] 18개 테스트 추가 — 413/413 pass
+- [x] `npm version patch` → v0.7.5 배포 ✅
 
 ## 🔧 ADR (Architecture Decision Records)
 
