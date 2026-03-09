@@ -2,7 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.4] - 2026-03-10
+
+### 🤖 LLM Router — Council + 팀장 통합 외부 LLM 바인딩 레이어
+
+**369/369 unit tests (26 files), 0 defects**
+
+Echo chamber 문제를 근본 해결 — AI가 자기 작업을 자기가 검수하는 구조를 3개 다른 제조사 LLM으로 대체.
+
+### Added
+- **`src/core/llm-router.ts`** — 통합 외부 LLM 라우팅 엔진
+  - 5개 프로바이더: `openai`(GPT-4o), `deepseek-cloud`(DeepSeek-V3.1:671b), `qwen3-local`(Qwen3:30b), `gemma3-local`(Gemma3:27b), `qwen3-coder-cloud`(Qwen3-Coder:480b)
+  - `invoke()` — 단일 LLM 호출 (실패 시 throw 대신 `success:false` 반환)
+  - `invokeParallel()` — `Promise.allSettled()` 기반 병렬 호출 (부분 실패 허용)
+  - `buildCouncilRequests()` — COUNCIL_PRESET 5인 자동 빌드 (CTO/CFO/CMO/CLO/DA)
+  - `buildTeamLeadRequest()` — 코드 리뷰어 팀장 단일 요청 빌드
+  - **CLO 의무 disclaimer** — 법무/의료 역할 감지 시 면책 조항 자동 삽입
+  - `getStats()` — 총 비용 누적 + 성공률 추적
+- **`external_review` MCP 도구** (`review` 그룹)
+  - `mode='council'` → 5인 병렬 전략 회의 (프리셋 역할→모델 매핑)
+  - `mode='team_lead'` → 코드 리뷰어 1인 검수 (DeepSeek 기반)
+  - `mode='custom'` → 역할/프로바이더 자유 구성
+- **`tests/core/llm-router.test.ts`** — 17 unit tests (OpenAI/Ollama 100% mock, 실 API 비용 없음)
+
+### Changed
+- MCP tools count: 33 → **34** (added `external_review` in `review` group)
+- Unit tests: 352 → **369** (+17 new tests)
+- Version bump: 0.7.3 → **0.7.4**
+- `prepublishOnly` — `persona-simulator.test.ts` 제외 (실 Ollama 없이 publish 가능)
+
+### Architecture Decision
+- ADR-010 추가: Council + 팀장 통합 외부 LLM 바인딩 (3개 다른 제조사로 echo chamber 방지)
+- 예상 비용: 월 $2~4 (CFO 검토 통과)
+
 ## [0.7.3] - 2026-03-07
+
 
 ### 🔬 Eval Framework 완성 — 52개 스킬 전수 검사
 

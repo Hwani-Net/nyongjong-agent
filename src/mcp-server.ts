@@ -29,6 +29,7 @@ import { createLogger } from './utils/logger.js';
 import { recordGateDecision, setLastGate, setLastPRD } from './core/shared-state.js';
 import { SkillLifecycleManager, parseFrontmatter } from './core/skill-lifecycle.js';
 import { SkillBenchmark } from './core/skill-benchmark.js';
+import { LLMRouter, COUNCIL_PRESET, type CouncilRole } from './core/llm-router.js';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { readFileSync } from 'fs';
@@ -131,6 +132,9 @@ export function createMcpServer(options: McpServerOptions): McpServer {
   // Group: "lifecycle" — Skill lifecycle management (Skills 2.0)
   registry.register('skill_audit', 'lifecycle', 'Scan skills and generate lifecycle audit report');
   registry.register('skill_benchmark', 'lifecycle', 'A/B benchmark comparison for skill effectiveness');
+
+  // Group: "review" — External LLM review (Council 5인 + 팀장 통합)
+  registry.register('external_review', 'review', 'External LLM review: council(5인) | team_lead(1~2인) | custom');
 
   // Initialize core modules
   const store = new ObsidianStore({ apiKey: config.OBSIDIAN_API_KEY, apiUrl: config.OBSIDIAN_API_URL });
@@ -1537,6 +1541,78 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     },
   );
 
+
+  // ─── Tool: external_review ───
+  // Unified Council (5인) / 팀장 검수 (1~2인) / custom routing
+  const llmRouter = new LLMRouter();
+
+  server.tool(
+    'external_review',
+    'External LLM review — council(5인 전원) | team_lead(코드 검수 1인) | custom(자유 구성)',
+    {
+      mode: z.enum(['council', 'team_lead', 'custom']).describe('council=5인 전략회의, team_lead=코드검수 1인, custom=자유 구성'),
+      topic: z.string().describe('안건 / 검수할 코드 / 질문'),
+      context: z.string().optional().describe('추가 컨텍스트 (PRD, 배경, diff 등)'),
+      roles: z.array(z.object({
+        name: z.string().describe('역할명 (예: CTO, 보안 감사자)'),
+        systemPrompt: z.string().optional().describe('커스텀 시스템 프롬프트 (없으면 기본값)'),
+        provider: z.string().optional().describe('프로바이더 ID (openai | deepseek-cloud | qwen3-local | gemma3-local)'),
+      })).optional().describe('custom 모드에서만 사용. council/team_lead는 프리셋 사용'),
+      provider: z.string().optional().describe('team_lead 모드에서 사용할 프로바이더 (기본: deepseek-cloud)'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('external_review')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('external_review') }] };
+      }
+      log.info('external_review called', { mode: params.mode, topicLen: params.topic.length });
+
+      const fullTopic = params.context
+        ? `## 안건\n${params.topic}\n\n## 컨텍스트\n${params.context}`
+        : params.topic;
+
+      let requests;
+
+      if (params.mode === 'council') {
+        // Fixed 5-member council with preset role→provider mapping
+        requests = llmRouter.buildCouncilRequests(fullTopic);
+      } else if (params.mode === 'team_lead') {
+        // Single code-reviewer (팀장)
+        requests = [llmRouter.buildTeamLeadRequest(fullTopic, { provider: params.provider })];
+      } else {
+        // Custom: user-defined roles
+        if (!params.roles || params.roles.length === 0) {
+          return { content: [{ type: 'text' as const, text: '❌ custom 모드에서는 roles 배열이 필수입니다.' }] };
+        }
+        requests = params.roles.map((r) => ({
+          role: r.name,
+          systemPrompt: r.systemPrompt ?? `당신은 ${r.name}입니다. 반드시 한국어로만 답변하세요.`,
+          userMessage: fullTopic,
+          provider: r.provider ?? 'deepseek-cloud',
+        }));
+      }
+
+      // Parallel invoke — partial failures don't block
+      const responses = await llmRouter.invokeParallel(requests);
+      const stats = llmRouter.getStats();
+
+      // Format output
+      const sections = responses.map((r) => [
+        `## ${r.success ? '✅' : '❌'} ${r.role} (${r.model})`,
+        r.content,
+        `> ⏱ ${r.durationMs}ms | 💰 $${r.cost.toFixed(3)}`,
+      ].join('\n\n'));
+
+      const summary = [
+        `---`,
+        `## 📊 리뷰 요약`,
+        `- 참여: ${responses.length}인 | 성공: ${responses.filter((r) => r.success).length}인`,
+        `- 총 비용: $${stats.totalCostUsd.toFixed(3)} | 누적 호출: ${stats.totalCalls}회`,
+      ].join('\n');
+
+      const fullReport = [...sections, summary].join('\n\n---\n\n');
+      return { content: [{ type: 'text' as const, text: fullReport }] };
+    },
+  );
 
   const totalTools = registry.getState().length;
   log.info(`MCP Server configured with ${totalTools} tools (runtime toggleable)`);

@@ -8,11 +8,11 @@
 | 항목 | 값 |
 |------|-----|
 | **이름** | `nyongjong-agent` |
-| **버전** | `0.7.3` |
+| **버전** | `0.7.4` |
 | **경로** | `E:\Agent\뇽죵이Agent` |
 | **런타임** | Node.js ≥22, TypeScript, ESM |
-| **테스트** | vitest — **352/352 pass** (25 파일) |
-| **MCP 도구** | **33개** (core 3 + toggle 28 + lifecycle 2) |
+| **테스트** | vitest — **369/369 pass** (26 파일) |
+| **MCP 도구** | **34개** (core 3 + toggle 29 + lifecycle 2) |
 | **프로토콜** | Model Context Protocol (stdio) |
 | **GitHub** | https://github.com/Hwani-Net/nyongjong-agent |
 | **npm** | https://www.npmjs.com/package/nyongjong-agent |
@@ -23,6 +23,7 @@
 src/
 ├── core/          # Config, ObsidianStore, TaskManager, ToolRegistry, SharedState
 │                  # SkillLifecycleManager (v0.7.1), SkillBenchmark (v0.7.1)
+│                  # **LLMRouter (v0.7.4)** — 외부 LLM 바인딩 레이어
 ├── personas/      # PersonaLoader, PersonaEngine, PersonaSimulator, Templates, Generator
 ├── workflow/      # Understand, BusinessGate, PRDElicitation, FeedbackRouter, CycleRunner
 ├── grounding/     # GroundingEngine, Adapters (KOSIS, Law, Naver, Trends, AppReviews, Web)
@@ -31,7 +32,7 @@ src/
 ├── advisory/      # CriticCheck (AgentPRM 패턴)
 ├── dashboard/     # Real-time SSE dashboard
 ├── utils/         # Logger (ring buffer)
-├── mcp-server.ts  # 33개 도구 등록 + runtime toggle
+├── mcp-server.ts  # **34개 도구** 등록 + runtime toggle
 ├── agent.ts       # Agent orchestration
 └── index.ts       # Entry point
 ```
@@ -89,6 +90,16 @@ src/
 - [x] **Git pre-commit hook** ✅ — tsc 타입체크 + 시크릿 패턴 필터 (ADR-003 이행)
 - [x] **GitHub Actions CI** ✅ — push/PR 시 tsc + vitest + build 자동 실행 (커밋 `077ff07`)
 - [ ] `SKILL_CATALOG.md` 61개 → 최정예 재분류 최종 확정
+
+### Phase: v0.7.4 진행 중 (2026-03-10)
+
+- [x] **LLM Router** (`src/core/llm-router.ts`) — Council(5인)/팀장(1인) 통합 외부 LLM 바인딩 레이어
+  - [x] 3개 프로바이더: OpenAI GPT-4o, Ollama Cloud (DeepSeek-V3.1:671b), Ollama Local (Qwen3:30b)
+  - [x] `invokeParallel()` — Promise.allSettled 기반 병렬 호출 (부분 실패 허용)
+  - [x] CLO 의무 disclaimer 자동 삽입 (법무/의료 역할)
+- [x] **`external_review` MCP 도구** — council / team_lead / custom 3모드
+- [x] `tests/core/llm-router.test.ts` — 17 tests, tsc clean, 369/369 pass
+- [x] **ADR-010 추가** → `DECISIONS.md`
 
 ## 🔧 ADR (Architecture Decision Records)
 
