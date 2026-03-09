@@ -1,34 +1,34 @@
 // Unit tests for LLMRouter — all external API calls are mocked
-// No real OpenAI / Ollama calls. Uses vi.mock to stub providers.
+// No real OpenAI / Ollama calls. Uses vi.hoisted() + vi.mock to stub providers.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { LLMRouter, COUNCIL_PRESET, type ReviewRequest } from '../../src/core/llm-router.js';
 
-// ─── Mock openai module ───────────────────────────────────────────────────────
-vi.mock('openai', () => {
-  const mockCreate = vi.fn().mockResolvedValue({
+// ─── Hoisted mock vars ───────────────────────────────────────────────────────
+// vi.hoisted() runs BEFORE vi.mock() factories — allows external variable refs inside factories.
+// This is the officially supported vitest pattern for shared mocks.
+const { mockCreate, mockChat } = vi.hoisted(() => ({
+  mockCreate: vi.fn().mockResolvedValue({
     choices: [{ message: { content: '[OpenAI mock response]' } }],
-  });
-  return {
-    default: vi.fn().mockImplementation(() => ({
-      chat: { completions: { create: mockCreate } },
-    })),
-    __mockCreate: mockCreate,
-  };
-});
+  }),
+  mockChat: vi.fn().mockResolvedValue({
+    message: { content: '[Ollama mock response]' },
+  }),
+}));
+
+// ─── Mock openai module ───────────────────────────────────────────────────────
+vi.mock('openai', () => ({
+  default: vi.fn().mockImplementation(() => ({
+    chat: { completions: { create: mockCreate } },
+  })),
+}));
 
 // ─── Mock ollama module ───────────────────────────────────────────────────────
-vi.mock('ollama', () => {
-  const mockChat = vi.fn().mockResolvedValue({
-    message: { content: '[Ollama mock response]' },
-  });
-  return {
-    Ollama: vi.fn().mockImplementation(() => ({
-      chat: mockChat,
-      list: vi.fn().mockResolvedValue({ models: [] }),
-    })),
-    __mockChat: mockChat,
-  };
-});
+vi.mock('ollama', () => ({
+  Ollama: vi.fn().mockImplementation(() => ({
+    chat: mockChat,
+    list: vi.fn().mockResolvedValue({ models: [] }),
+  })),
+}));
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -49,11 +49,20 @@ describe('LLMRouter', () => {
 
   beforeEach(() => {
     process.env.OPENAI_API_KEY = 'sk-test-key';
+    // Restore mock return values each test — prevents leakage when vi.clearAllMocks() ran
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { content: '[OpenAI mock response]' } }],
+    });
+    mockChat.mockResolvedValue({
+      message: { content: '[Ollama mock response]' },
+    });
     router = new LLMRouter();
   });
 
   afterEach(() => {
-    vi.clearAllMocks();
+    // No vi.clearAllMocks() here — clearAllMocks resets mock return values,
+    // which would undo the mockResolvedValue calls in beforeEach for other tests.
+    // beforeEach fully restores mock state before each test, so nothing needed here.
   });
 
   // ─── Provider management ────────────────────────────────────────────────
@@ -194,9 +203,9 @@ describe('LLMRouter', () => {
   // ─── Cost tracking ───────────────────────────────────────────────────────
 
   it('should accumulate total cost across calls', async () => {
-    await router.invoke(makeRequest({ provider: 'openai' }));     // $0.02
+    await router.invoke(makeRequest({ provider: 'openai' }));         // $0.02
     await router.invoke(makeRequest({ provider: 'deepseek-cloud' })); // $0.002
-    await router.invoke(makeRequest({ provider: 'qwen3-local' })); // $0
+    await router.invoke(makeRequest({ provider: 'qwen3-local' }));    // $0
 
     const stats = router.getStats();
     expect(stats.totalCalls).toBe(3);
@@ -204,8 +213,8 @@ describe('LLMRouter', () => {
   });
 
   it('should track success rate correctly', async () => {
-    await router.invoke(makeRequest({ provider: 'deepseek-cloud' }));      // success
-    await router.invoke(makeRequest({ provider: 'nonexistent-fail' }));    // failure
+    await router.invoke(makeRequest({ provider: 'deepseek-cloud' }));   // success
+    await router.invoke(makeRequest({ provider: 'nonexistent-fail' })); // failure
 
     const stats = router.getStats();
     expect(stats.successRate).toBeCloseTo(0.5, 1);

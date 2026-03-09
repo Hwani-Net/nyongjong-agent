@@ -195,6 +195,7 @@ export class LLMRouter {
   async invoke(request: ReviewRequest): Promise<ReviewResponse> {
     const provider = this.providers.get(request.provider);
     if (!provider) {
+      this.recordFailure();  // Track unknown provider as failure in stats
       return this.errorResponse(request, `Unknown provider: ${request.provider}`);
     }
 
