@@ -129,8 +129,13 @@ src/
   - [x] CycleRunner 상태 복원: `restoreWorkflowState()` 구현 + `run_cycle` 호출 시 이전 상태 확인
   - [x] 팀장 외부 검수 PASS (DeepSeek)
   - [x] 유닛 테스트 15건 추가 (커밋 `9ceffe5`) — 395/395 pass
+- [x] **NLM 파이프라인 Hard Gate** (2026-03-10)
+  - [x] `GEMINI.md`에 NotebookLM 적재 의무 Hard Gate 규칙 추가
+  - [x] `SKILL_CATALOG.md`에 nlm-skill "조사·분석 필수" 등록
+  - [x] `nlm-skill/SKILL.md` v0.4.4 반영 (cited_text, cited_table, cinematic, 파일포맷, bulk sharing, setup all, mind map JSON)
+  - [x] `/조사` NLM 파이프라인 검증 — 3소스 적재 + cited_text 응답 확인 (alias: `nlm04x`)
 - [ ] 비즈니스 도메인 페르소나 추가 (프랜차이즈/부동산/SaaS/법률)
-- [ ] GEMINI.md 다이어트 (572줄 → 축소)
+- [ ] `npm version patch` → v0.7.5 배포
 
 ## 🔧 ADR (Architecture Decision Records)
 
