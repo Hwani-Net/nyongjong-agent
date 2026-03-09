@@ -87,7 +87,7 @@ src/
 - [x] **삭제 9건** ✅ — devil-* 3개, secret-filter, 단일명령어 5개 완료
 - [x] **디자인 스킬 통합** ✅ — 구 스킬 5개 삭제, `stitch-pencil-pipeline` 마스터 파이프라인 유지
 - [x] **Git pre-commit hook** ✅ — tsc 타입체크 + 시크릿 패턴 필터 (ADR-003 이행)
-- [ ] GitHub Actions CI 파이프라인 (추후)
+- [x] **GitHub Actions CI** ✅ — push/PR 시 tsc + vitest + build 자동 실행 (커밋 `077ff07`)
 - [ ] `SKILL_CATALOG.md` 61개 → 최정예 재분류 최종 확정
 
 ## 🔧 ADR (Architecture Decision Records)
@@ -125,4 +125,5 @@ src/
 
 ## 🔒 시스템 강제 게이트
 - **Git pre-commit hook** (`.git/hooks/pre-commit`): tsc 타입체크 + 시크릿 패턴 필터
+- **GitHub Actions CI** (`.github/workflows/ci.yml`): push/pull_request 시 tsc, vitest, build 강제 검증 자동화
 - **SKILL_CATALOG.md**: 61개 활성 자산 카탈로그 (ADR-007 기반)
