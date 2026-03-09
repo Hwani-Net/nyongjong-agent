@@ -197,8 +197,8 @@ import { BUILTIN_ROLE_CARDS, findRoleCard, buildRoleCardPrompt, buildSituationPr
 import type { Persona } from '../../src/personas/persona-loader.js';
 
 describe('Role Card System', () => {
-  it('should have 6 built-in Role Cards (CTO, QA, CEO, Designer, DevRel, Angry User)', () => {
-    expect(BUILTIN_ROLE_CARDS.length).toBe(6);
+  it('should have 8 built-in Role Cards (CTO, QA, CEO, Designer, Angry, DevRel, Franchise, Legal)', () => {
+    expect(BUILTIN_ROLE_CARDS.length).toBe(8);
 
     const ids = BUILTIN_ROLE_CARDS.map((c) => c.id);
     expect(ids).toContain('cto-jihoon');
@@ -207,6 +207,8 @@ describe('Role Card System', () => {
     expect(ids).toContain('designer-yuna');
     expect(ids).toContain('angry-kim');
     expect(ids).toContain('devrel-jaehee');
+    expect(ids).toContain('franchise-advisor-minji');
+    expect(ids).toContain('legal-risk-seonwoo');
 
     // Verify each card has required fields
     for (const card of BUILTIN_ROLE_CARDS) {
