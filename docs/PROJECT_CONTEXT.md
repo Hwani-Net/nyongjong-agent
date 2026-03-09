@@ -52,6 +52,19 @@ src/
 - [x] ObsidianStore REST API 전환 완료
 - [x] `docs/` 레거시 5파일 아카이브 → `docs/archive/`
 
+### Phase: v0.7.X 릴리스 준비 ✅ (2026-03-09 ~ 진행중)
+
+- [x] 워크플로우 분석.md, 자율.md에 `persona_generate` 선행 조건 수동 매핑 추가 (GAP 1)
+- [x] 워크플로우 수정.md에 `mcp_nongjong-agent_feedback_classify` 피드백 분류 추가 (GAP 3)
+- [x] **`stitch_design_audit`** 도구 개발 (ADR-008 준수: Approximation 감지, DOM / Effect 유지 확인) (GAP 2)
+  - [x] `auditDesignCompliance` 모듈 및 16개 테스트 케이스 구현 완료
+  - [x] `tests/stitch/stitch-design-audit.test.ts` (100% 통과)
+  - [x] `mcp-server.ts` 등록 (도구 35개)
+- [x] **NotebookLM(NLM) Fact-Only 지식 저장소 통합**
+  - [x] 조사, 분석, 자율, 기획 워크플로우 전반에 걸쳐 NLM을 기본 RAG 파이프라인으로 강제
+  - [x] 할루시네이션 방지: AI가 생성한 요약 대신 원본 URL과 텍스트만을 Source로 추가하고 질의
+- [ ] npm 패키지 버전 범프 및 배포 (`v0.7.4` 또는 `v0.7.5`)
+
 ### Phase: v0.7.0 → v0.7.3 완료 ✅ (2026-03-06 ~ 2026-03-07)
 
 - [x] Phase 0.7: **Skills 2.0** — SkillLifecycleManager + SkillBenchmark A/B 엔진
