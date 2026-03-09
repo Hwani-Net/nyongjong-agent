@@ -12,7 +12,7 @@
 | **경로** | `E:\Agent\뇽죵이Agent` |
 | **런타임** | Node.js ≥22, TypeScript, ESM |
 | **테스트** | vitest — **369/369 pass** (26 파일) |
-| **MCP 도구** | **34개** (core 3 + toggle 29 + lifecycle 2) |
+| **MCP 도구** | **35개** (core 3 + toggle 30 + lifecycle 2) |
 | **프로토콜** | Model Context Protocol (stdio) |
 | **GitHub** | https://github.com/Hwani-Net/nyongjong-agent |
 | **npm** | https://www.npmjs.com/package/nyongjong-agent |
@@ -28,11 +28,11 @@ src/
 ├── workflow/      # Understand, BusinessGate, PRDElicitation, FeedbackRouter, CycleRunner
 ├── grounding/     # GroundingEngine, Adapters (KOSIS, Law, Naver, Trends, AppReviews, Web)
 ├── execution/     # ShellRunner, SelfHeal, CompletionLoop, CICDGate
-├── stitch/        # StitchIdeate, DesignSystemExtract, ForumCheck (v0.6.0)
+├── stitch/        # StitchIdeate, DesignSystemExtract, ForumCheck, **DesignAudit (v0.7.5)**
 ├── advisory/      # CriticCheck (AgentPRM 패턴)
 ├── dashboard/     # Real-time SSE dashboard
 ├── utils/         # Logger (ring buffer)
-├── mcp-server.ts  # **34개 도구** 등록 + runtime toggle
+├── mcp-server.ts  # **35개 도구** 등록 + runtime toggle
 ├── agent.ts       # Agent orchestration
 └── index.ts       # Entry point
 ```
