@@ -121,6 +121,16 @@ src/
 - [x] Obsidian 의료 페르소나 3개 정리 (health-compliance/elderly/nurse 삭제)
 - [x] `docs/DECISIONS.md` 생성 — ADR-001~010 전체 기록 (커밋 `bfc321f`)
 
+### Phase: v0.7.5-dev (2026-03-10 진행 중)
+
+- [x] **ADR-011: Workflow Pipeline Hard-Links** ✅ (커밋 `9383708`)
+  - [x] Gate 0 → Gate 1 컨텍스트 파이프: `PRDElicitationInput.businessConstraints` 추가
+  - [x] PRD 자동 영속화: `prd_elicit` 완료 시 Obsidian `뇽죵이Agent/prd/` 자동 저장
+  - [x] CycleRunner 상태 복원: `restoreWorkflowState()` 구현 + `run_cycle` 호출 시 이전 상태 확인
+  - [x] 팀장 외부 검수 PASS (DeepSeek)
+- [ ] 비즈니스 도메인 페르소나 추가 (프랜차이즈/부동산/SaaS/법률)
+- [ ] GEMINI.md 다이어트 (572줄 → 축소)
+
 ## 🔧 ADR (Architecture Decision Records)
 
 ### ADR-001: Stitch 도구는 MCP 프록시가 아닌 "계획 생성기"
@@ -158,4 +168,4 @@ src/
 - **Git pre-commit hook** (`.git/hooks/pre-commit`): tsc 타입체크 + 시크릿 패턴 필터
 - **GitHub Actions CI** (`.github/workflows/ci.yml`): push/pull_request 시 tsc, vitest, build 강제 검증 자동화
 - **SKILL_CATALOG.md**: 51개 활성 자산 카탈로그 (ADR-007 기반, 2026-03-10 최종 검증)
-- **DECISIONS.md**: ADR-001~010 아키텍처 결정 기록 (축약 금지 원칙)
+- **DECISIONS.md**: ADR-001~011 아키텍처 결정 기록 (축약 금지 원칙)
