@@ -83,6 +83,13 @@ src/
       - Dashboard SSE "Connecting..." 버그 근본 수정 (onclick `\\'` → `&apos;`)
       - obsidian-writing eval 오탐 수정 (workflow 스킬 → 은퇴 대상 아님 확인)
 
+### 96개 자산 재분류 실행 현황 (ADR-007, 2026-03-09)
+- [x] **삭제 9건** ✅ — devil-* 3개, secret-filter, 단일명령어 5개 완료
+- [x] **디자인 스킬 통합** ✅ — 구 스킬 5개 삭제, `stitch-pencil-pipeline` 마스터 파이프라인 유지
+- [x] **Git pre-commit hook** ✅ — tsc 타입체크 + 시크릿 패턴 필터 (ADR-003 이행)
+- [ ] GitHub Actions CI 파이프라인 (추후)
+- [ ] `SKILL_CATALOG.md` 61개 → 최정예 재분류 최종 확정
+
 ## 🔧 ADR (Architecture Decision Records)
 
 ### ADR-001: Stitch 도구는 MCP 프록시가 아닌 "계획 생성기"
@@ -115,3 +122,7 @@ src/
 - `persona_generate` 도구가 README에 언급되나 registry에서 확인 필요
 - Stitch forum RSS URL이 실제로 접근 가능한지 네트워크 테스트 미완료
 - SkillBenchmark 메트릭이 in-memory에만 저장됨 — 서버 재시작 시 초기화
+
+## 🔒 시스템 강제 게이트
+- **Git pre-commit hook** (`.git/hooks/pre-commit`): tsc 타입체크 + 시크릿 패턴 필터
+- **SKILL_CATALOG.md**: 61개 활성 자산 카탈로그 (ADR-007 기반)
