@@ -85,4 +85,4 @@
 - **증상**: `/자율` 워크플로우 중 `run_command`로 `npx tsc --noEmit`, `npx tsx scripts/...` 실행 시 터미널 hang → 사용자가 수동 취소해야만 해제됨
 - **원인 추정**: 복수 Antigravity 터미널 컨텍스트 충돌, 또는 `/자율`의 긴 연속 컨텍스트에서 WaitMsBeforeAsync 부족
 - **해결**: `mcp_nongjong-agent_shell_run` MCP 도구로 대체 (timeoutMs: 30000 명시)
-- **재발 방지**: `/자율` 워크플로우 내 빌드/테스트/실행은 `shell_run` 우선 사용. `run_command`는 배포 등 대화형 단계에만.
+- **재발 방지**: **모든 워크플로우**(/수정, /분석, /자율, /기능 등)에서 빌드/테스트/실행은 `shell_run` MCP 우선 사용. `run_command`는 대화형 단계나 dev 서버 등에만 사용.

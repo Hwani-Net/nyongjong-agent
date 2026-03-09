@@ -128,6 +128,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
   registry.register('stitch_ideate', 'stitch', 'Generate multi-prompt design comparison plans');
   registry.register('stitch_design_system_extract', 'stitch', 'Extract design tokens from Stitch HTML');
   registry.register('stitch_forum_check', 'stitch', 'Check Stitch forum for new posts via RSS');
+  registry.register('stitch_design_audit', 'stitch', 'Audit implementation code against Stitch HTML for ADR-008 compliance');
 
   // Group: "lifecycle" — Skill lifecycle management (Skills 2.0)
   registry.register('skill_audit', 'lifecycle', 'Scan skills and generate lifecycle audit report');
@@ -1538,6 +1539,26 @@ export function createMcpServer(options: McpServerOptions): McpServer {
         default:
           return { content: [{ type: 'text' as const, text: '❌ Unknown action. Use: start_baseline, end_with_skill, get_stats, summary, flush, flush_all, run_eval, scan_evals, retire, reactivate, auto_generate_eval, bulk_generate_evals' }] };
       }
+    },
+  );
+
+
+  // ─── Tool: stitch_design_audit ───
+  server.tool(
+    'stitch_design_audit',
+    'Audit implementation code against Stitch HTML for ADR-008 Design Dictatorship Protocol compliance',
+    {
+      stitchHtml: z.string().describe('Raw HTML from Stitch get_screen'),
+      implCode: z.string().describe('Implementation code (TSX, CSS, or combined) to audit'),
+    },
+    async (params) => {
+      if (!registry.isEnabled('stitch_design_audit')) {
+        return { content: [{ type: 'text' as const, text: registry.disabledMessage('stitch_design_audit') }] };
+      }
+      const { auditDesignCompliance } = await import('./stitch/stitch-design-audit.js');
+      const result = auditDesignCompliance(params.stitchHtml, params.implCode);
+      log.info('stitch_design_audit completed', { verdict: result.verdict, score: result.score, violations: result.violations.length });
+      return { content: [{ type: 'text' as const, text: result.summary }] };
     },
   );
 
