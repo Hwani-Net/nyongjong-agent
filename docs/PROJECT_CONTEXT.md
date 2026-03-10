@@ -140,6 +140,15 @@ src/
   - [x] 2개 역할 카드 추가 (민지: 프랜차이즈 규제 자문, 선우: 법무 리스크 관리자)
   - [x] 18개 테스트 추가 — 413/413 pass
 - [x] `npm version patch` → v0.7.5 배포 ✅
+- [x] **ADR-011: "뇽죵아" 트리거 기반 워크플로우 전환** (2026-03-10)
+  - [x] GEMINI.md 전면 리팩터링: 2-Track 모드 시스템 (뇽죵이 모드 + 일반 모드)
+  - [x] 트리거-액션 매핑 7개, Pre/Post-Flight 조건부 전환
+  - [x] 슬래시 커맨드 9→5개 정리 (분석/자율/기획/수정 아카이브)
+- [x] **ADR-012: MCP→CLI 전환** (2026-03-10)
+  - [x] Obsidian MCP → Obsidian CLI (v1.12.4) — 12도구 절약
+  - [x] Perplexity MCP → curl REST API — 1도구 절약
+  - [x] Firebase MCP → firebase CLI — 크래시 제거
+  - [x] CLI 전체 검증 완료 (9개 Obsidian 명령 + curl + firebase-tools)
 
 ## 🔧 ADR (Architecture Decision Records)
 
