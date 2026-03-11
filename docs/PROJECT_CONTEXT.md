@@ -11,8 +11,8 @@
 | **버전** | `0.7.7` |
 | **경로** | `E:\Agent\뇽죵이Agent` |
 | **런타임** | Node.js ≥22, TypeScript, ESM |
-| **테스트** | vitest — **439/439 pass** (30 파일) |
-| **MCP 도구** | **35개** (core 3 + toggle 30 + lifecycle 2) |
+| **테스트** | vitest — **445/445 pass** (30 파일) |
+| **MCP 도구** | **26개 활성** (core 3 + toggle 12 + lifecycle 2 + 11 disabled → Skills) |
 | **프로토콜** | Model Context Protocol (stdio) |
 | **GitHub** | https://github.com/Hwani-Net/nyongjong-agent |
 | **npm** | https://www.npmjs.com/package/nyongjong-agent |
@@ -91,6 +91,28 @@ src/
   - [x] tsc --noEmit 에러 0개, vitest 316/316 pass
   - [x] CHANGELOG.md v0.7.1 업데이트
   - [x] Git push (커밋 `43b708e`) + npm publish 완료
+
+### Phase: MCP→Skills Phase 0+1 완료 ✅ (2026-03-12)
+
+- [x] Phase 0: 스킬 7개 신규 생성 + 3개 확장 (MCP 코드 변경 0)
+- [x] Phase 1: `tool_toggle`로 11개 MCP 도구 비활성화
+  - disabled: `analyze_goal`, `business_gate`, `prd_elicit`, `feedback_classify`, `run_cycle`, `critic_check`, `recommend_model`, `list_models`, `stitch_ideate`, `stitch_design_system_extract`, `stitch_design_audit`
+  - 대체 Skills: `goal-analyzer`, `business-viability`, `prd-template`(확장), `feedback-router`, `cycle-orchestrator`, `pentagonal-audit`(확장), `model-selector`, `stitch-pencil-pipeline`(확장), `design-token-extractor`, `design-audit`
+  - 롤백: `tool_toggle(group="workflow", enabled=true)` → 10초 복원
+- [ ] Phase 2: MCP 코드 제거 (Phase 1 성공 2주 후)
+
+### Phase: Agent Manager 통합 + 감사 시스템 ✅ (2026-03-12)
+
+- [x] Agent Manager 통합 분석 보고서 작성 (6개 전략, GEMINI.md 분리 안 하기로 결정)
+- [x] `.agent/references/agent-manager-templates.md` — 병렬 에이전트 프롬프트 템플릿 3시나리오
+- [x] `.agent/references/tool-toggle-profiles.md` — 역할별 MCP tool_toggle 프로파일
+- [x] `/저장` 워크플로우에 Agent Manager 릴레이 패턴 추가
+- [x] Skills description 보강 (8개 frontmatter 트리거 키워드 추가)
+- [x] `/감사` 워크플로우 2-모드 체계 구축
+  - `.agent/evals/agent/` — 에이전트 감사 YAML 7그룹 22개
+  - `.agent/evals/project/` — 프로젝트 감사 YAML 8개 체크포인트
+- [x] 에이전트 감사 실행: **22/22 S등급**
+- [x] 프로젝트 감사 실행: **3/3 S등급** (pentagonal 93/100, 445/445 tests)
 
 ### TODO (미래)
 - [ ] npm Token 갱신 필요일: **2026-06-02** (Granular Token 90일 만료)
