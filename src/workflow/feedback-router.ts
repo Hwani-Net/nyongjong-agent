@@ -120,7 +120,26 @@ export function classifyFeedback(feedback: string): FeedbackClassification {
   // Highest scoring target wins
   const winner = scores[0];
   const maxPossibleScore = ROLLBACK_PATTERNS.find(p => p.target === winner.target)!.patterns.length;
-  const confidence = Math.min(winner.score / maxPossibleScore, 1.0);
+
+  // Improved confidence formula:
+  // Base confidence (0.4) ensures a single keyword match still feels meaningful.
+  // The remaining 0.6 scales with how many patterns matched out of total.
+  const BASE_CONFIDENCE = 0.4;
+  const rawRatio = winner.score / maxPossibleScore;
+  let confidence = BASE_CONFIDENCE + rawRatio * (1 - BASE_CONFIDENCE);
+
+  // Runner-up gap boost: if winner has 2x+ score of runner-up, boost confidence
+  if (scores.length >= 2) {
+    const runnerUp = scores[1];
+    if (winner.score >= runnerUp.score * 2) {
+      confidence = Math.min(confidence + 0.1, 1.0);
+    }
+  } else {
+    // Only one target matched — no competition, slight boost
+    confidence = Math.min(confidence + 0.05, 1.0);
+  }
+
+  confidence = Math.min(confidence, 1.0);
 
   const matchedEntry = ROLLBACK_PATTERNS.find(p => p.target === winner.target)!;
 

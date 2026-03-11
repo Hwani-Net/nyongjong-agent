@@ -132,4 +132,22 @@ describe('SkillLifecycleManager', () => {
     expect(report.topUsed).toHaveLength(1); // wf-b
     expect(report.report).toContain('스킬 수명 감사 보고서');
   });
+
+  it('should have createdAt timestamp', () => {
+    const before = Date.now();
+    const freshManager = new SkillLifecycleManager();
+    const after = Date.now();
+    expect(freshManager.createdAt).toBeGreaterThanOrEqual(before);
+    expect(freshManager.createdAt).toBeLessThanOrEqual(after);
+  });
+
+  it('should include uptime warning in report for short uptime', () => {
+    manager.registerSkills([
+      { name: 'test-skill', description: 'Test', category: 'capability' },
+    ]);
+    const report = manager.generateAuditReport(30);
+    // Manager was just created so uptime is < 1 minute
+    expect(report.report).toContain('서버 가동 시간');
+    expect(report.report).toContain('미사용 데이터는 서버 재시작 영향');
+  });
 });

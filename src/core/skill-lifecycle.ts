@@ -68,6 +68,8 @@ export function parseFrontmatter(content: string): { name: string; description: 
  */
 export class SkillLifecycleManager {
   private skills = new Map<string, SkillMeta>();
+  /** Timestamp when this manager was created (server start proxy) */
+  readonly createdAt: number = Date.now();
 
   /**
    * Register skills from parsed frontmatter data.
@@ -159,9 +161,21 @@ export class SkillLifecycleManager {
     const capCount = all.filter(s => s.category === 'capability').length;
     const wfCount = all.filter(s => s.category === 'workflow').length;
 
+    // Calculate server uptime for context
+    const uptimeMs = Date.now() - this.createdAt;
+    const uptimeMinutes = Math.floor(uptimeMs / 60000);
+    const uptimeHours = Math.floor(uptimeMinutes / 60);
+    const uptimeStr = uptimeHours > 0
+      ? `${uptimeHours}시간 ${uptimeMinutes % 60}분`
+      : `${uptimeMinutes}분`;
+    const isShortUptime = uptimeMinutes < 60;
+
     // Format report
     const lines: string[] = [
       `# 🔍 스킬 수명 감사 보고서`,
+      '',
+      `> 📡 서버 가동 시간: **${uptimeStr}** (사용 추적은 in-memory)`,
+      ...(isShortUptime ? [`> ⚠️ 가동 시간 ${uptimeMinutes}분 — 미사용 데이터는 서버 재시작 영향. 은퇴 후보는 참고용으로만 활용하세요.`] : []),
       '',
       `| 항목 | 수치 |`,
       `|------|------|`,

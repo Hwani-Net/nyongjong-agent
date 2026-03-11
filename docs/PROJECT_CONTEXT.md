@@ -11,7 +11,7 @@
 | **버전** | `0.7.5` |
 | **경로** | `E:\Agent\뇽죵이Agent` |
 | **런타임** | Node.js ≥22, TypeScript, ESM |
-| **테스트** | vitest — **413/413 pass** (28 파일) |
+| **테스트** | vitest — **435/435 pass** (30 파일) |
 | **MCP 도구** | **35개** (core 3 + toggle 30 + lifecycle 2) |
 | **프로토콜** | Model Context Protocol (stdio) |
 | **GitHub** | https://github.com/Hwani-Net/nyongjong-agent |
@@ -173,6 +173,10 @@ src/
 - [x] **GEMINI.md 슬래시 커맨드 HARD GATE 추가** (2026-03-11)
   - [x] `/` 입력 시 `view_file workflows/[커맨드].md` 첫 번째 도구 호출 강제
   - [x] 기억 의존 절차 스킵 방지
+- [x] **🐸 종합 감사 실행 — S등급 (22/22)** (2026-03-11)
+  - [x] 감사 프롬프트 22개 테스트 × 7개 그룹 직접 실행
+  - [x] 전 도구 정상 동작 확인 (external_review DeepSeek 실비용 $0.002)
+  - [x] ADR-013 추가: MCP 도구 종합 감사 프레임워크
 
 ## 🔧 ADR (Architecture Decision Records)
 

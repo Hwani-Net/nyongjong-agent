@@ -97,7 +97,8 @@ export function analyzeGoal(input: UnderstandInput): UnderstandOutput {
     (knowledgeItems?.length || 0) > 2,  // Many related KIs
     goal.length > 200,                  // Long description
     wordCount > 30,                     // Many words = detailed request
-    /\b(인증|결제|보안|실시간|암호화|OAuth|JWT|WebSocket)\b/i.test(goal),
+    // P-009: \b doesn't work with Korean. Split into Korean (loose) + English (\b) patterns.
+    /(인증|결제|보안|실시간|암호화)/i.test(goal) || /\b(OAuth|JWT|WebSocket)\b/i.test(goal),
     hasExternalAPI,                     // External API integration
     hasMultiFile,                       // Multi-file changes
     hasMigration,                       // Migration/transformation work
@@ -106,6 +107,13 @@ export function analyzeGoal(input: UnderstandInput): UnderstandOutput {
     /i18n|다국어|localization|번역|intl/i.test(goal),  // i18n = cross-cutting complexity
     // Multi-system integration (3+ distinct techs/services mentioned)
     (goal.match(/\b(Next\.?js|React|Vue|Svelte|Express|Flask|Django|Supabase|Firebase|Stripe|Redis|Docker|K8s|PostgreSQL|MongoDB|GraphQL|gRPC|WebSocket|Prisma)\b/gi) || []).length >= 3,
+    // AI/ML domain — inherently complex inference, prompt engineering, evaluation
+    // Note: \b doesn't work with Korean (Unicode non-word chars), so Korean terms use loose match
+    /(AI|인공지능|머신러닝|machine\s*learning|LLM|GPT|Gemini|Claude|모델\s*학습|추론|inference|embedding|RAG|fine.?tun|프롬프트|prompt\s*engineer)/i.test(goal),
+    // Regulatory/legal domain — compliance rules add hidden complexity
+    /(세금|신고|납부|tax|법률|법규|규제|금융|의료|HIPAA|GDPR|컴플라이언스|compliance|인허가|개인정보|약관|전자상거래법|통신판매|특허)/i.test(goal),
+    // Target user scale — serving businesses/enterprises adds operational complexity
+    /(소상공인|자영업|중소기업|B2B|기업용|enterprise|플랫폼|SaaS|멀티테넌트|multi.?tenant)/i.test(goal),
   ].filter(Boolean).length;
 
   const complexity = complexitySignals >= 4 ? 'critical'

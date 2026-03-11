@@ -4,6 +4,30 @@
 
 ---
 
+## ADR-013: MCP 도구 종합 감사 프레임워크 (2026-03-11)
+
+### 컨텍스트
+v0.7.5에서 35개 MCP 도구가 등록되었으나 통합 검증 수단이 없었음. 개별 유닛 테스트(413개)는 모듈 단위 검증이지, MCP 프로토콜을 통한 E2E 동작은 보장하지 않음.
+
+### 결정
+22개 E2E 테스트 × 7개 그룹으로 구성된 **종합 감사 프롬프트**를 정형화:
+- **그룹 A**: 상태 확인 (agent_status, tool_status, list_models, recommend_model)
+- **그룹 B**: 페르소나 CRUD (list → consult → create → update → delete)
+- **그룹 C**: 워크플로우 분석 (analyze_goal, business_gate, feedback_classify, critic_check)
+- **그룹 D**: 스킬 라이프사이클 (skill_audit, skill_benchmark summary/cycle)
+- **그룹 E**: 외부 LLM 리뷰 (external_review team_lead — 실비용 발생)
+- **그룹 F**: 실행/복구 (shell_run, task CRUD, tool_toggle ON/OFF/ON)
+- **그룹 G**: Stitch 디자인 (stitch_ideate, stitch_design_audit)
+
+**채점**: S(100%) / A(86%+) / B(68%+) / C(50%+) / F 등급제. SKIP은 분모에서 제외.
+
+### 결과
+- `nongjong_agent_audit_prompt.md` — 외부 Agent Manager에서 독립 실행 가능한 프롬프트
+- 첫 감사 결과: **22/22 (S등급)**, 실패 항목 없음 (2026-03-11)
+- 매 릴리스 전 감사 프롬프트 실행을 권장 (CI 대체 아님, 보완용)
+
+---
+
 ## ADR-011: Workflow Pipeline Hard-Links (2026-03-10)
 
 ### 컨텍스트
