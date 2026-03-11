@@ -11,7 +11,7 @@
 | **버전** | `0.7.6` |
 | **경로** | `E:\Agent\뇽죵이Agent` |
 | **런타임** | Node.js ≥22, TypeScript, ESM |
-| **테스트** | vitest — **435/435 pass** (30 파일) |
+| **테스트** | vitest — **439/439 pass** (30 파일) |
 | **MCP 도구** | **35개** (core 3 + toggle 30 + lifecycle 2) |
 | **프로토콜** | Model Context Protocol (stdio) |
 | **GitHub** | https://github.com/Hwani-Net/nyongjong-agent |
