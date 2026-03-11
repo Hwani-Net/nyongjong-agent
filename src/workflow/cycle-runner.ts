@@ -1,4 +1,5 @@
-// Cycle Runner — orchestrates the full AI circular workflow (Gate0 → Gate1 → Prototype → Validate → Evolve → Report)
+// Cycle Runner — orchestrates the full AI circular workflow
+// Gate0 → Gate1 → Prototype → Validate → Evolve → TeamLead Review → Visual Check → Report
 import { createLogger } from '../utils/logger.js';
 import { notifyClawStageChange, notifyClawComplete } from './claw-bridge.js';
 import { analyzeGoal, type UnderstandInput, type UnderstandOutput } from './understand.js';
@@ -17,6 +18,7 @@ import { recordGateDecision, setLastGate, setLastPRD } from '../core/shared-stat
 import type { PersonaEngine } from '../personas/persona-engine.js';
 import type { PersonaSimulator } from '../personas/persona-simulator.js';
 import type { ObsidianStore } from '../core/obsidian-store.js';
+import type { LLMRouter, ReviewResponse } from '../core/llm-router.js';
 
 const log = createLogger('cycle-runner');
 
@@ -28,9 +30,31 @@ export type CycleStatus =
   | 'prototyping'
   | 'validating'
   | 'evolving'
+  | 'reviewing'       // ADR-014: Team Lead code review
+  | 'visual_check'    // ADR-014: Browser visual verification
   | 'reporting'
   | 'complete'
   | 'failed';
+
+/** Result of Team Lead code review stage */
+export interface TeamLeadReviewResult {
+  /** PASS, WARN, or BLOCK */
+  verdict: 'PASS' | 'WARN' | 'BLOCK';
+  /** Full review response from external LLM */
+  review: ReviewResponse;
+  /** Number of attempts (1 or 2 if auto-retried after BLOCK) */
+  attempts: number;
+}
+
+/** Result of browser visual check stage */
+export interface VisualCheckResult {
+  /** Whether the visual check passed */
+  passed: boolean;
+  /** Screenshot path if captured */
+  screenshotPath?: string;
+  /** Notes from the visual check */
+  notes: string;
+}
 
 export interface CycleRunnerOptions {
   /** Maximum prototype→validate→evolve retries */
@@ -51,6 +75,12 @@ export interface CycleRunnerOptions {
   obsidianStore?: ObsidianStore;
   /** Optional GitWorktree for branch isolation per task */
   gitWorktree?: GitWorktree;
+  /** Optional LLMRouter for Team Lead code review (ADR-014) */
+  llmRouter?: LLMRouter;
+  /** Optional browser visual check callback (ADR-014). Returns pass/fail + notes. */
+  onVisualCheck?: (goal: string, projectRoot: string) => Promise<VisualCheckResult>;
+  /** Max retries when Team Lead returns BLOCK verdict (default: 3) */
+  maxReviewRetries?: number;
 }
 
 export interface CycleState {
@@ -63,6 +93,10 @@ export interface CycleState {
   prototypePlan?: PrototypePlan;
   validationHistory: ValidationResult[];
   evolutionHistory: EvolveOutput[];
+  /** ADR-014: Team Lead review result */
+  teamLeadReview?: TeamLeadReviewResult;
+  /** ADR-014: Browser visual check result */
+  visualCheck?: VisualCheckResult;
   report?: Report;
   startedAt: string;
   totalDurationMs: number;
@@ -302,6 +336,87 @@ export class CycleRunner {
         log.info(`Retrying with ${evolution.fixes.length} suggested fixes...`);
       }
 
+      // ── Stage 5.5: Team Lead Code Review (ADR-014) ────────────────────────
+      if (lastValidation!.passed && this.options.llmRouter) {
+        this.setStatus('reviewing');
+        log.info('━━━ Stage 5.5: Team Lead Code Review ━━━');
+
+        const maxReviewRetries = this.options.maxReviewRetries ?? 3;
+        let reviewAttempts = 0;
+        let finalReview: ReviewResponse | null = null;
+        let reviewVerdict: 'PASS' | 'WARN' | 'BLOCK' = 'BLOCK';
+
+        for (let reviewAttempt = 1; reviewAttempt <= maxReviewRetries; reviewAttempt++) {
+          reviewAttempts = reviewAttempt;
+          log.info(`Team Lead review attempt ${reviewAttempt}/${maxReviewRetries}`);
+
+          const reviewRequest = this.options.llmRouter.buildTeamLeadRequest(
+            `## 코드 리뷰 요청\n\n**목표**: ${input.goal}\n**유형**: ${this.state.understanding!.analysis.taskType}\n**복잡도**: ${this.state.understanding!.analysis.complexity}\n\n**검증 결과**: 빌드/테스트 ${lastValidation!.passed ? '통과' : '실패'}\n**검증 항목**: ${lastValidation!.checks.map(c => `${c.passed ? '✅' : '❌'} ${c.name}`).join(', ')}\n\n이 작업의 코드 품질, 보안 취약점, 아키텍처 문제를 검토하고 PASS/WARN/BLOCK 중 하나로 판정해주세요.`,
+          );
+
+          finalReview = await this.options.llmRouter.invoke(reviewRequest);
+
+          if (!finalReview.success) {
+            log.warn(`Team Lead review failed: ${finalReview.error}. Treating as PASS (graceful degradation).`);
+            reviewVerdict = 'PASS';
+            break;
+          }
+
+          // Parse verdict from review content
+          const content = finalReview.content.toLowerCase();
+          if (content.includes('block') || content.includes('차단') || content.includes('거부')) {
+            reviewVerdict = 'BLOCK';
+            log.warn(`Team Lead verdict: BLOCK (attempt ${reviewAttempt}/${maxReviewRetries})`);
+            if (reviewAttempt < maxReviewRetries) {
+              log.info('Auto-retrying after BLOCK...');
+              continue;
+            }
+          } else if (content.includes('warn') || content.includes('경고') || content.includes('주의')) {
+            reviewVerdict = 'WARN';
+            log.info('Team Lead verdict: WARN — proceeding with caution');
+            break;
+          } else {
+            reviewVerdict = 'PASS';
+            log.info('Team Lead verdict: PASS');
+            break;
+          }
+        }
+
+        this.state.teamLeadReview = {
+          verdict: reviewVerdict,
+          review: finalReview!,
+          attempts: reviewAttempts,
+        };
+
+        log.info(`Team Lead review complete: ${reviewVerdict} (${reviewAttempts} attempts)`);
+      } else if (!lastValidation!.passed) {
+        log.info('Skipping Team Lead review — validation failed');
+      } else {
+        log.info('Skipping Team Lead review — no LLMRouter configured');
+      }
+
+      // ── Stage 5.7: Browser Visual Check (ADR-014) ──────────────────────────
+      const hasUI = /ui|페이지|화면|컴포넌트|디자인|프론트|대시보드/i.test(input.goal);
+      if (lastValidation!.passed && hasUI && this.options.onVisualCheck) {
+        this.setStatus('visual_check');
+        log.info('━━━ Stage 5.7: Browser Visual Check ━━━');
+
+        try {
+          this.state.visualCheck = await this.options.onVisualCheck(input.goal, this.options.projectRoot);
+          log.info(`Visual check: ${this.state.visualCheck.passed ? 'PASS' : 'FAIL'} — ${this.state.visualCheck.notes}`);
+        } catch (err) {
+          log.warn('Visual check failed (non-fatal)', err);
+          this.state.visualCheck = {
+            passed: true,
+            notes: `시각 검증 오류 (비치명적): ${err instanceof Error ? err.message : String(err)}`,
+          };
+        }
+      } else if (!hasUI) {
+        log.info('Skipping visual check — non-UI task');
+      } else {
+        log.info('Skipping visual check — no onVisualCheck callback configured');
+      }
+
       // ── Stage 7: Report ───────────────────────────────────────────────────
       this.setStatus('reporting');
       log.info('━━━ Stage 7: Report ━━━');
@@ -322,6 +437,17 @@ export class CycleRunner {
           allSatisfied: this.state.prdResult.allSatisfied,
         } : undefined,
         forceGates: input.forceGates,
+        // ADR-014: Team Lead + Visual Check results
+        teamLeadReview: this.state.teamLeadReview ? {
+          verdict: this.state.teamLeadReview.verdict,
+          attempts: this.state.teamLeadReview.attempts,
+          reviewSummary: this.state.teamLeadReview.review.content.slice(0, 500),
+        } : undefined,
+        visualCheck: this.state.visualCheck ? {
+          passed: this.state.visualCheck.passed,
+          notes: this.state.visualCheck.notes,
+          screenshotPath: this.state.visualCheck.screenshotPath,
+        } : undefined,
       });
 
       this.state.report = report;

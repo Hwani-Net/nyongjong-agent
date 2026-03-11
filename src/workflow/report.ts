@@ -32,6 +32,18 @@ export interface ReportInput {
   prdResult?: { version: number; rounds: number; allSatisfied: boolean };
   /** Whether gates were force-enabled */
   forceGates?: boolean;
+  /** ADR-014: Team Lead review result */
+  teamLeadReview?: {
+    verdict: 'PASS' | 'WARN' | 'BLOCK';
+    attempts: number;
+    reviewSummary: string;
+  };
+  /** ADR-014: Browser visual check result */
+  visualCheck?: {
+    passed: boolean;
+    notes: string;
+    screenshotPath?: string;
+  };
 }
 
 export interface Report {
@@ -108,6 +120,28 @@ export function generateReport(input: ReportInput): Report {
     sections.push(`- ${check.passed ? '✅' : '❌'} \`${check.name}\` (${check.durationMs}ms)`);
   }
   sections.push('');
+
+  // ADR-014: Team Lead Review
+  if (input.teamLeadReview) {
+    const { verdict, attempts, reviewSummary } = input.teamLeadReview;
+    const rIcon = verdict === 'PASS' ? '✅' : verdict === 'WARN' ? '⚠️' : '❌';
+    sections.push('## 👨‍💻 팀장 코드 리뷰');
+    sections.push(`- **판정**: ${rIcon} ${verdict} (${attempts}회 시도)`);
+    sections.push(`- **요약**: ${reviewSummary.slice(0, 300)}${reviewSummary.length > 300 ? '...' : ''}`);
+    sections.push('');
+  }
+
+  // ADR-014: Browser Visual Check
+  if (input.visualCheck) {
+    const vIcon = input.visualCheck.passed ? '✅' : '❌';
+    sections.push('## 🖥️ 브라우저 시각 검증');
+    sections.push(`- **결과**: ${vIcon} ${input.visualCheck.passed ? '통과' : '불합격'}`);
+    sections.push(`- **메모**: ${input.visualCheck.notes}`);
+    if (input.visualCheck.screenshotPath) {
+      sections.push(`- **스크린샷**: ${input.visualCheck.screenshotPath}`);
+    }
+    sections.push('');
+  }
 
   // Issues (if any)
   if (validation.issues.length > 0) {

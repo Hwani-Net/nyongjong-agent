@@ -112,3 +112,92 @@ describe('createPrototypePlan (pure logic)', () => {
     expect(plan.notes).toContain('Plan Summary');
   });
 });
+
+// ─── ADR-014: Team Lead Review + Visual Check stages ──────────────────────
+describe('CycleRunner ADR-014 stages', () => {
+  // Mock LLMRouter that always returns PASS
+  function makeMockLLMRouter() {
+    return {
+      buildTeamLeadRequest: (content: string) => ({
+        role: '코드 리뷰어 (팀장)',
+        systemPrompt: 'test prompt',
+        userMessage: content,
+        provider: 'test',
+      }),
+      invoke: async () => ({
+        role: '코드 리뷰어 (팀장)',
+        provider: 'test',
+        model: 'test-model',
+        content: '코드 품질 양호합니다. PASS 판정.',
+        durationMs: 100,
+        cost: 0,
+        success: true,
+      }),
+    };
+  }
+
+  it('should include teamLeadReview in state when llmRouter is provided', async () => {
+    const runner = new CycleRunner({
+      maxRetries: 1,
+      projectRoot: PROJECT_ROOT,
+      runShell: makeMockShell(),
+      llmRouter: makeMockLLMRouter() as any,
+    });
+
+    await runner.run({ goal: 'TypeScript 유틸리티 함수 구현' });
+    const state = runner.getState();
+
+    expect(state.teamLeadReview).toBeDefined();
+    expect(state.teamLeadReview!.verdict).toBe('PASS');
+    expect(state.teamLeadReview!.attempts).toBe(1);
+  }, TIMEOUT);
+
+  it('should include teamLeadReview section in report markdown', async () => {
+    const runner = new CycleRunner({
+      maxRetries: 1,
+      projectRoot: PROJECT_ROOT,
+      runShell: makeMockShell(),
+      llmRouter: makeMockLLMRouter() as any,
+    });
+
+    const report = await runner.run({ goal: 'REST API 서버 개발' });
+    expect(report.markdown).toContain('팀장 코드 리뷰');
+    expect(report.markdown).toContain('PASS');
+  }, TIMEOUT);
+
+  it('should trigger visual check for UI-related goals', async () => {
+    let visualCheckCalled = false;
+    const runner = new CycleRunner({
+      maxRetries: 1,
+      projectRoot: PROJECT_ROOT,
+      runShell: makeMockShell(),
+      onVisualCheck: async () => {
+        visualCheckCalled = true;
+        return { passed: true, notes: '화면 정상' };
+      },
+    });
+
+    await runner.run({ goal: '대시보드 페이지 UI 구현' });
+    const state = runner.getState();
+
+    expect(visualCheckCalled).toBe(true);
+    expect(state.visualCheck).toBeDefined();
+    expect(state.visualCheck!.passed).toBe(true);
+  }, TIMEOUT);
+
+  it('should skip visual check for non-UI goals', async () => {
+    let visualCheckCalled = false;
+    const runner = new CycleRunner({
+      maxRetries: 1,
+      projectRoot: PROJECT_ROOT,
+      runShell: makeMockShell(),
+      onVisualCheck: async () => {
+        visualCheckCalled = true;
+        return { passed: true, notes: '화면 정상' };
+      },
+    });
+
+    await runner.run({ goal: 'TypeScript 유틸리티 함수 구현' });
+    expect(visualCheckCalled).toBe(false);
+  }, TIMEOUT);
+});
