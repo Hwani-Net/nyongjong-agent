@@ -17,9 +17,9 @@ const DISCLAIMER_TEXT =
 // 5-member fixed council: matches council/SKILL.md ADR-001
 export const COUNCIL_PRESET: CouncilRole[] = [
   { name: 'CTO', systemPromptKey: 'cto', provider: 'deepseek-cloud' },
-  { name: 'CFO', systemPromptKey: 'cfo', provider: 'openai' },
+  { name: 'CFO', systemPromptKey: 'cfo', provider: 'deepseek-cloud' },
   { name: 'CMO', systemPromptKey: 'cmo', provider: 'qwen3-local' },
-  { name: 'CLO', systemPromptKey: 'clo', provider: 'openai' },
+  { name: 'CLO', systemPromptKey: 'clo', provider: 'deepseek-cloud' },
   { name: '악마의 대변인', systemPromptKey: 'da', provider: 'deepseek-cloud' },
 ];
 
