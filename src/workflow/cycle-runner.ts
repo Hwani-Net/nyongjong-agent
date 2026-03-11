@@ -337,21 +337,30 @@ export class CycleRunner {
       }
 
       // ── Stage 5.5: Team Lead Code Review (ADR-014) ────────────────────────
+      // Feedback-based review loop:
+      //   BLOCK → Evolve(with review feedback) → re-Validate → re-Review
+      //   until PASS/WARN or maxReviewRetries exhausted
       if (lastValidation!.passed && this.options.llmRouter) {
         this.setStatus('reviewing');
         log.info('━━━ Stage 5.5: Team Lead Code Review ━━━');
 
-        const maxReviewRetries = this.options.maxReviewRetries ?? 3;
+        const maxReviewRetries = this.options.maxReviewRetries ?? 10;
         let reviewAttempts = 0;
         let finalReview: ReviewResponse | null = null;
         let reviewVerdict: 'PASS' | 'WARN' | 'BLOCK' = 'BLOCK';
+        let lastReviewContent = '';
 
         for (let reviewAttempt = 1; reviewAttempt <= maxReviewRetries; reviewAttempt++) {
           reviewAttempts = reviewAttempt;
           log.info(`Team Lead review attempt ${reviewAttempt}/${maxReviewRetries}`);
 
+          // Build review request with context + previous feedback (if any)
+          const previousFeedback = lastReviewContent
+            ? `\n\n**이전 리뷰 피드백**:\n${lastReviewContent.slice(0, 500)}\n\n위 피드백 기반으로 수정된 코드를 재검토해주세요.`
+            : '';
+
           const reviewRequest = this.options.llmRouter.buildTeamLeadRequest(
-            `## 코드 리뷰 요청\n\n**목표**: ${input.goal}\n**유형**: ${this.state.understanding!.analysis.taskType}\n**복잡도**: ${this.state.understanding!.analysis.complexity}\n\n**검증 결과**: 빌드/테스트 ${lastValidation!.passed ? '통과' : '실패'}\n**검증 항목**: ${lastValidation!.checks.map(c => `${c.passed ? '✅' : '❌'} ${c.name}`).join(', ')}\n\n이 작업의 코드 품질, 보안 취약점, 아키텍처 문제를 검토하고 PASS/WARN/BLOCK 중 하나로 판정해주세요.`,
+            `## 코드 리뷰 요청\n\n**목표**: ${input.goal}\n**유형**: ${this.state.understanding!.analysis.taskType}\n**복잡도**: ${this.state.understanding!.analysis.complexity}\n\n**검증 결과**: 빌드/테스트 ${lastValidation!.passed ? '통과' : '실패'}\n**검증 항목**: ${lastValidation!.checks.map(c => `${c.passed ? '✅' : '❌'} ${c.name}`).join(', ')}${previousFeedback}\n\n이 작업의 코드 품질, 보안 취약점, 아키텍처 문제를 검토하고 PASS/WARN/BLOCK 중 하나로 판정해주세요.`,
           );
 
           finalReview = await this.options.llmRouter.invoke(reviewRequest);
@@ -367,8 +376,43 @@ export class CycleRunner {
           if (content.includes('block') || content.includes('차단') || content.includes('거부')) {
             reviewVerdict = 'BLOCK';
             log.warn(`Team Lead verdict: BLOCK (attempt ${reviewAttempt}/${maxReviewRetries})`);
+
+            // Same-review early exit: if review is identical to last time, evolve won't help
+            if (finalReview.content === lastReviewContent) {
+              log.warn('Team Lead gave identical review — no further progress possible. Stopping.');
+              break;
+            }
+            lastReviewContent = finalReview.content;
+
             if (reviewAttempt < maxReviewRetries) {
-              log.info('Auto-retrying after BLOCK...');
+              // Feed review feedback into Evolve → re-Validate cycle
+              log.info('BLOCK → Evolving with review feedback → re-Validating...');
+
+              this.setStatus('evolving');
+              const reviewEvolution = evolve({
+                validation: lastValidation!,
+                attempt: reviewAttempt,
+                maxAttempts: maxReviewRetries,
+                // Inject review feedback as additional issues
+                reviewFeedback: finalReview.content.slice(0, 1000),
+              });
+              this.state.evolutionHistory.push(reviewEvolution);
+
+              // Re-validate after evolve
+              this.setStatus('validating');
+              lastValidation = await validate({
+                projectRoot: this.options.projectRoot,
+                commands: this.state.prototypePlan!.commands,
+                runShell: this.options.runShell,
+              });
+              this.state.validationHistory.push(lastValidation);
+
+              if (!lastValidation.passed) {
+                log.warn('Re-validation failed after evolve — stopping review loop');
+                break;
+              }
+
+              this.setStatus('reviewing');
               continue;
             }
           } else if (content.includes('warn') || content.includes('경고') || content.includes('주의')) {

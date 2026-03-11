@@ -11,6 +11,8 @@ export interface EvolveInput {
   attempt: number;
   /** Maximum retry attempts */
   maxAttempts: number;
+  /** Optional: Team Lead review feedback to incorporate into fix suggestions (ADR-014) */
+  reviewFeedback?: string;
 }
 
 export interface EvolveOutput {
@@ -44,8 +46,8 @@ export interface FixSuggestion {
  * The system tries to self-heal up to maxAttempts times.
  */
 export function evolve(input: EvolveInput): EvolveOutput {
-  const { validation, attempt, maxAttempts } = input;
-  log.info(`Evolution analysis: attempt ${attempt}/${maxAttempts}`);
+  const { validation, attempt, maxAttempts, reviewFeedback } = input;
+  log.info(`Evolution analysis: attempt ${attempt}/${maxAttempts}${reviewFeedback ? ' (with review feedback)' : ''}`);
 
   // If validation passed, no evolution needed
   if (validation.passed) {
@@ -111,6 +113,16 @@ export function evolve(input: EvolveInput): EvolveOutput {
       description: 'Unrecognized failure pattern — requires manual analysis',
       type: 'code-change',
       confidence: 'low',
+    });
+  }
+
+  // ADR-014: Incorporate Team Lead review feedback into fix suggestions
+  if (reviewFeedback) {
+    fixes.push({
+      forCheck: 'team-lead-review',
+      description: `팀장 리뷰 피드백: ${reviewFeedback.slice(0, 200)}`,
+      type: 'code-change',
+      confidence: 'high',
     });
   }
 

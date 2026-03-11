@@ -80,7 +80,7 @@ export function initializeAgent(config: AppConfig): AgentModules {
 
   // Workflow (inject personaEngine + personaSimulator + gitWorktree for Gate 0/1 + branch isolation)
   const cycleRunner = new CycleRunner({
-    maxRetries: 3,
+    maxRetries: 10,
     projectRoot: PROJECT_ROOT,
     runShell: (cmd: string, cwd: string) => shellRunner.run(cmd, cwd),
     personaEngine,

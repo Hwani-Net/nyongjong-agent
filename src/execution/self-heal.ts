@@ -1,4 +1,4 @@
-// Self-heal module — auto-retry failed builds/tests up to 3 times with error analysis
+// Self-heal module — auto-retry failed builds/tests up to 10 times with error analysis
 import { ShellRunner } from './shell-runner.js';
 import { createLogger } from '../utils/logger.js';
 import type { ShellResult } from '../workflow/validate.js';
@@ -6,7 +6,7 @@ import type { ShellResult } from '../workflow/validate.js';
 const log = createLogger('self-heal');
 
 export interface SelfHealOptions {
-  /** Maximum retry attempts (default: 3) */
+  /** Maximum retry attempts (default: 10) */
   maxRetries?: number;
   /** Working directory for commands */
   cwd: string;
@@ -77,7 +77,7 @@ function analyzeError(stderr: string, stdout: string): string {
  * On each failure, logs error analysis and retries up to maxRetries.
  */
 export async function selfHealRun(options: SelfHealOptions): Promise<SelfHealResult> {
-  const { maxRetries = 3, cwd, commands } = options;
+  const { maxRetries = 10, cwd, commands } = options;
   const shell = new ShellRunner({ defaultTimeoutMs: 120_000 }); // 2 min per command
   const attempts: SelfHealAttempt[] = [];
   let totalAttempts = 0;
@@ -147,7 +147,7 @@ export interface CompletionLoopOptions {
   completionCheck: string;
   /** Success string to search for in output (e.g., 'All tests passing', 'passing') */
   completionPromise: string;
-  /** Max iterations — user decides (default: 5) */
+  /** Max iterations — user decides (default: 10) */
   maxIterations?: number;
 }
 
@@ -189,7 +189,7 @@ export interface CompletionLoopResult {
  *   - Same-error early exit (3 consecutive identical errors → stop)
  */
 export async function completionLoopRun(options: CompletionLoopOptions): Promise<CompletionLoopResult> {
-  const { cwd, commands, completionCheck, completionPromise, maxIterations = 5 } = options;
+  const { cwd, commands, completionCheck, completionPromise, maxIterations = 10 } = options;
   const shell = new ShellRunner({ defaultTimeoutMs: 180_000 }); // 3 min per command
   const attempts: CompletionLoopAttempt[] = [];
   let consecutiveSameError = 0;
