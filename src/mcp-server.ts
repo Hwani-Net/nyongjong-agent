@@ -1026,6 +1026,13 @@ export function createMcpServer(options: McpServerOptions): McpServer {
             stage: ['implementation', 'reporting'], severity: 'WARN',
             common_bypass: '2024를 현재로 착각',
           },
+          {
+            id: 'NLM_REQUIRED', name: 'NLM 팩트 기반 지식 적재 필수',
+            rule: '조사/리서치 시 NLM에 소스 적재 필수',
+            check_questions: ['NLM 노트북이 생성되었는가?'],
+            stage: ['verification', 'reporting'], severity: 'BLOCK',
+            common_bypass: 'NLM 없이 AI 기억만으로 보고서 작성',
+          },
         ];
       }
 
@@ -1074,6 +1081,15 @@ export function createMcpServer(options: McpServerOptions): McpServer {
           if (action.includes('2024') && !['과거', '기준', '이전', 'in 2024', 'of 2024'].some(k => action.includes(k))) {
             violated = true;
             reason = '현재 시점에 2024 사용 (현재: 2026)';
+          }
+        }
+
+        if (principle.id === 'NLM_REQUIRED' && (params.stage === 'verification' || params.stage === 'reporting')) {
+          const isResearchTask = ['조사', '리서치', '분석', 'research', 'market', '경쟁사', '시장', '보고서 작성'].some(k => action.includes(k));
+          const hasNLM = ['nlm', 'notebooklm', '노트북', 'notebook', '소스 적재', 'source add', '소스 등록'].some(k => action.includes(k));
+          if (isResearchTask && !hasNLM) {
+            violated = true;
+            reason = '조사/리서치 작업인데 NLM 소스 적재 미언급';
           }
         }
 

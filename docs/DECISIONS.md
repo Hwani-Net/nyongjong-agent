@@ -4,6 +4,73 @@
 
 ---
 
+## ADR-014: QA 파이프라인 개선 — Team Lead 리뷰 + 시각 검증 통합 (2026-03-11)
+
+### 컨텍스트
+v0.7.5에서 `CycleRunner` 파이프라인은 `Gate0(사업성) → Gate1(PRD) → Prototype → Validate(빌드/테스트) → Evolve(재시도) → Report` 순서로 실행됨. 그러나 3가지 핵심 GAP이 발견됨:
+
+1. **G-1: Team Lead 코드 리뷰 미통합** (🔴 Critical) — `external_review(team_lead)` 도구가 독립적으로 존재하지만 `CycleRunner`에 연결되지 않음. 코드 변경이 검수 없이 보고됨.
+2. **G-2: 브라우저 시각 검증 없음** (🔴 Critical) — UI 작업 후 브라우저 확인 단계가 파이프라인에 없음. 빌드 통과 ≠ 화면 정상.
+3. **G-3: 검증↔보고 사이 품질 게이트 없음** (🟡 Medium) — Validate 통과하면 바로 Report. 중간에 코드 품질/보안 체크 없음.
+
+### 결정
+업계 표준 CI/CD + Code Review 파이프라인 순서에 맞춰 2개 신규 Stage를 `CycleRunner`에 추가:
+
+```
+Gate0 → Gate1 → Prototype → Validate(빌드/테스트)
+  → Stage 5.5: Team Lead 코드 리뷰
+  → Stage 5.7: 브라우저 시각 검증
+  → Report(대표님 보고)
+```
+
+**Stage 5.5: Team Lead Review**
+- Validate PASS 후에만 실행 (빌드 실패한 코드를 리뷰하면 시간 낭비)
+- `LLMRouter`를 통해 `external_review(team_lead)` 호출 (기본: DeepSeek-V3.1:671b)
+- BLOCK 판정 시 → `reviewFeedback` 필드로 Evolve 단계에 피드백 전달 → 수정 → 재검증 → 재리뷰
+- 최대 10회 재시도 (기존 3회에서 상향). 10회째도 BLOCK이면 보고에 포함하고 대표님에게 에스컬레이션
+
+**Stage 5.7: Browser Visual Check**
+- UI 작업(`hasUI=true`)일 때만 실행 (regex: `ui|페이지|화면|컴포넌트|디자인|프론트|대시보드`)
+- `browser_subagent` 호출하여 dev 서버 스크린샷 캡처
+- 결과를 Report에 첨부
+- 비-UI 작업(리팩터링, 문서)은 자동 스킵
+
+**피드백 기반 Evolve 루프**
+- Team Lead가 BLOCK + 피드백을 줄 경우, `CycleState.reviewFeedback`에 저장
+- Evolve 단계에서 피드백을 참조하여 수정안 생성 → Validate → 재리뷰
+- 이 루프가 업계 표준 "코드 리뷰 → 수정 → 재리뷰" 패턴과 동일
+
+### 왜 이 결정을 했는가
+종합 감사(ADR-013, 22/22 S등급) 실행 후, 도구 개별 동작은 완벽하지만 **파이프라인 수준에서 연결이 끊어져 있음**을 발견:
+
+- `external_review(team_lead)` 도구는 정상 동작하지만, `run_cycle`을 실행해도 호출되지 않음
+- AI가 자기 코드를 자기가 검수하는 echo chamber 문제가 `CycleRunner` 파이프라인 내에서도 그대로 재현
+- 브라우저 확인 없이 `빌드 통과 = 완료`로 보고하면, 실제 화면이 깨진 채 대표님에게 전달
+
+**업계 표준과의 비교:**
+```
+일반 CI/CD: 빌드 → 테스트 → 코드 리뷰(PR) → QA 시각 검증 → 승인 → 배포
+뇽죵이 AS-IS: 빌드 → 테스트 → [GAP] → [GAP] → 보고
+뇽죵이 TO-BE: 빌드 → 테스트 → Team Lead 리뷰 → 시각 검증 → 보고
+```
+
+**"코드 리뷰 → 시각 검증" 순서의 이유:**
+코드에 보안 취약점이나 아키텍처 문제가 있으면 화면이 멀쩡해도 릴리스 불가. 코드 리뷰를 먼저 통과해야 시각 검증에 들어가는 것이 업계 표준.
+
+### 결과
+- `src/workflow/cycle-runner.ts` — Stage 5.5, 5.7 구현 + `reviewFeedback` 루프
+- `CycleStatus`에 `'reviewing'`, `'visual_check'` 추가
+- `CycleState`에 `teamLeadReview?`, `visualCheck?` 필드 추가
+- `CycleRunnerOptions`에 `llmRouter?`, `onVisualCheck?`, `maxReviewRetries?` 추가
+- `agent.ts` — LLMRouter 인스턴스를 CycleRunner에 주입
+- 전역 재시도 기본값 3→10회 상향 (`selfHeal`, `completionLoop`, `CycleRunner`, Team Lead`)
+- `/수정` 워크플로우에 팀장 리뷰 HARD GATE + BLOCK→피드백 수정 루프 추가
+- `/디자인` 워크플로우에 `stitch_design_audit` + 팀장 리뷰 재시도 10회 추가
+- 테스트 4건 추가 (Team Lead PASS flow, Report markdown, UI visual check 트리거, 비-UI 스킵)
+- **439/439 테스트 전체 통과**, v0.7.7 릴리스 + GitHub push 완료
+
+---
+
 ## ADR-013: MCP 도구 종합 감사 프레임워크 (2026-03-11)
 
 ### 컨텍스트

@@ -76,6 +76,7 @@ export function analyzeGoal(input: UnderstandInput): UnderstandOutput {
   const hasStrategy = /전략|설계|아키텍처|비교|분석|수립|방향|로드맵|architect|strategy|design\s?pattern|roadmap/i.test(goal);
   const hasDocumentation = /문서|README|가이드|트러블|설명|주석|CHANGELOG/i.test(goal);
   const hasSimple = /확인|조회|목록|리스트|보여|알려/i.test(goal);
+  const hasResearch = /조사|리서치|시장\s?조사|경쟁사|트렌드|벤치마크|연구|분석.*보고서|research|market|competitor|survey/i.test(goal);
   const hasExternalAPI = /카카오|네이버|구글|AWS|Firebase|Supabase|외부\s?API|연동|Slack|Discord|Telegram/i.test(goal);
   const hasMultiFile = /분리|여러\s?파일|모듈|마이크로서비스|독립|컴포넌트\s?분리|microservice|monorepo|multi.?module/i.test(goal);
   const hasMigration = /마이그레이션|전환|이전|업그레이드|포팅|migrat|upgrade|port(?:ing)?/i.test(goal);
@@ -132,6 +133,9 @@ export function analyzeGoal(input: UnderstandInput): UnderstandOutput {
   if (hasStrategy) {
     personaQuestions.push(`이 전략의 기대 효과와 리스크를 비교 분석해주세요. 목표: ${goal}`);
   }
+  if (hasResearch) {
+    personaQuestions.push(`이 조사의 신뢰할 수 있는 데이터 소스는 무엇인가요? NLM에 적재할 원본 URL을 식별해주세요. 목표: ${goal}`);
+  }
   personaQuestions.push(`이 작업에서 가장 큰 리스크는 무엇일까요? 목표: ${goal}`);
 
   // Build key requirements from goal
@@ -144,6 +148,7 @@ export function analyzeGoal(input: UnderstandInput): UnderstandOutput {
   if (hasStrategy) keyRequirements.push('전략/설계 수립');
   if (hasDocumentation) keyRequirements.push('문서 작성/업데이트');
   if (hasExternalAPI) keyRequirements.push('외부 API 연동');
+  if (hasResearch) keyRequirements.push('📚 NLM 노트북 필수 — 팩트 기반 지식만 사용');
 
   // Identify risks
   const risks: string[] = [];
@@ -152,6 +157,7 @@ export function analyzeGoal(input: UnderstandInput): UnderstandOutput {
   if (complexitySignals >= 2) risks.push('높은 복잡도 — 단계별 검증 필요');
   if (hasExternalAPI) risks.push('외부 API 의존성 — 장애 전파 가능');
   if (hasMigration) risks.push('마이그레이션 — 기존 기능 회귀 위험');
+  if (hasResearch) risks.push('⚠️ NLM 미적재 시 할루시네이션 위험 — 반드시 원본 URL 소스로 적재');
 
   // Destructive operation detection
   const hasDangerous = /rm\s+-rf|DROP\s+(TABLE|DATABASE)|DELETE\s+FROM|삭제|초기화|format|truncate/i.test(goal);

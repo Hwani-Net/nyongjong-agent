@@ -89,3 +89,36 @@ describe('analyzeGoal basic behavior (no regression)', () => {
     expect(result.analysis.taskType).toBe('simple');
   });
 });
+
+describe('analyzeGoal NLM research detection (ADR-015 / G-3)', () => {
+  it('should detect "조사" keyword and require NLM notebook', () => {
+    const result = analyzeGoal({ goal: '한국 프랜차이즈 시장 규모와 트렌드를 조사하고 보고서를 작성해줘' });
+    expect(result.analysis.keyRequirements).toContain('📚 NLM 노트북 필수 — 팩트 기반 지식만 사용');
+    expect(result.analysis.risks.some(r => r.includes('NLM'))).toBe(true);
+  });
+
+  it('should detect "리서치" keyword and require NLM', () => {
+    const result = analyzeGoal({ goal: 'AI 에이전트 프레임워크 리서치 및 비교 분석' });
+    expect(result.analysis.keyRequirements).toContain('📚 NLM 노트북 필수 — 팩트 기반 지식만 사용');
+  });
+
+  it('should detect "경쟁사" keyword and require NLM', () => {
+    const result = analyzeGoal({ goal: '경쟁사 제품 분석 보고서 작성' });
+    expect(result.analysis.keyRequirements).toContain('📚 NLM 노트북 필수 — 팩트 기반 지식만 사용');
+  });
+
+  it('should detect English "research" keyword', () => {
+    const result = analyzeGoal({ goal: 'Research best practices for MCP server design' });
+    expect(result.analysis.keyRequirements).toContain('📚 NLM 노트북 필수 — 팩트 기반 지식만 사용');
+  });
+
+  it('should add NLM data source persona question', () => {
+    const result = analyzeGoal({ goal: '시장 조사 후 진입 가능성 보고서 작성' });
+    expect(result.personaQuestions.some(q => q.includes('NLM'))).toBe(true);
+  });
+
+  it('should NOT require NLM for non-research tasks', () => {
+    const result = analyzeGoal({ goal: '버튼 색상 버그 수정' });
+    expect(result.analysis.keyRequirements).not.toContain('📚 NLM 노트북 필수 — 팩트 기반 지식만 사용');
+  });
+});
