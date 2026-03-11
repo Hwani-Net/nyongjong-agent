@@ -8,7 +8,7 @@
 | 항목 | 값 |
 |------|-----|
 | **이름** | `nyongjong-agent` |
-| **버전** | `0.7.6` |
+| **버전** | `0.7.7` |
 | **경로** | `E:\Agent\뇽죵이Agent` |
 | **런타임** | Node.js ≥22, TypeScript, ESM |
 | **테스트** | vitest — **439/439 pass** (30 파일) |
@@ -52,6 +52,19 @@ src/
 - [x] ObsidianStore REST API 전환 완료
 - [x] `docs/` 레거시 5파일 아카이브 → `docs/archive/`
 
+### Phase: ADR-014 QA 파이프라인 개선 ✅ (2026-03-11 완료)
+
+- [x] CycleRunner Stage 5.5: Team Lead 코드 리뷰 (피드백 기반 Evolve→재검증 루프)
+- [x] CycleRunner Stage 5.7: 브라우저 시각 검증 (UI 작업 자동 감지)
+- [x] Evolve: `reviewFeedback` 필드 추가 (팀장 피드백→수정제안 통합)
+- [x] 전역 재시도 기본값 3→10 (selfHeal, completionLoop, CycleRunner, Team Lead)
+- [x] agent.ts: LLMRouter 인스턴스 CycleRunner에 주입
+- [x] GEMINI.md: `뇽죵아 수정해/자율 진행` 매핑에 `external_review(team_lead)` 추가
+- [x] `/수정` 워크플로우: 팀장 리뷰 HARD GATE + BLOCK→피드백 수정 루프
+- [x] `/디자인` 워크플로우: `stitch_design_audit` + 팀장 리뷰 재시도 10회
+- [x] 테스트: 439/439 pass (ADR-014 4개 테스트 추가)
+- [x] v0.7.7 릴리스 + GitHub push
+
 ### Phase: v0.7.X 릴리스 준비 ✅ (2026-03-09 완료)
 
 - [x] 워크플로우 분석.md, 자율.md에 `persona_generate` 선행 조건 수동 매핑 추가 (GAP 1)
@@ -87,6 +100,8 @@ src/
 - [x] npm publish v0.7.3 ✅
 - [x] npm publish v0.7.4 ✅
 - [x] npm publish v0.7.5 ✅
+- [x] v0.7.6 감사 관찰 사항 #1~#3 수정 (feedback confidence, complexity signals, uptime warning)
+- [x] v0.7.7 ADR-014 QA 파이프라인 (Team Lead + Visual Check + 피드백 기반 재시도)
 - [x] SkillBenchmark 메트릭 → Obsidian flush 구현 ✅ (커밋 `3d8813c`)
       - `POST /api/skills/flush-all` 엔드포인트 추가
       - Skills 페이지 💾 Obsidian 저장 버튼 UI 추가
