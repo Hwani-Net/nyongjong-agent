@@ -10,6 +10,7 @@ import { GroundingEngine } from './grounding/grounding-engine.js';
 import { OllamaClient } from './advisory/ollama-client.js';
 import { LlmBenchmark } from './advisory/llm-benchmark.js';
 import { CycleRunner } from './workflow/cycle-runner.js';
+import { LLMRouter } from './core/llm-router.js';
 import { ShellRunner } from './execution/shell-runner.js';
 import { TestRunner } from './execution/test-runner.js';
 import { GitWorktree } from './execution/git-worktree.js';
@@ -41,6 +42,7 @@ export interface AgentModules {
   testRunner: TestRunner;
   gitWorktree: GitWorktree;
   toolRegistry: ToolRegistry;
+  llmRouter: LLMRouter;
 }
 
 /**
@@ -78,7 +80,10 @@ export function initializeAgent(config: AppConfig): AgentModules {
   const testRunner = new TestRunner({ shellRunner, projectRoot: PROJECT_ROOT });
   const gitWorktree = new GitWorktree({ repoPath: PROJECT_ROOT, shellRunner });
 
-  // Workflow (inject personaEngine + personaSimulator + gitWorktree for Gate 0/1 + branch isolation)
+  // LLM Router (ADR-014: Team Lead review integration)
+  const llmRouter = new LLMRouter();
+
+  // Workflow (inject personaEngine + personaSimulator + gitWorktree + llmRouter)
   const cycleRunner = new CycleRunner({
     maxRetries: 10,
     projectRoot: PROJECT_ROOT,
@@ -86,6 +91,7 @@ export function initializeAgent(config: AppConfig): AgentModules {
     personaEngine,
     personaSimulator,
     gitWorktree,
+    llmRouter,
     onGateDecision: (goal: string, verdict: string) => {
       const analysis = analyzeGoal({ goal });
       recordGateDecision({
@@ -139,6 +145,7 @@ export function initializeAgent(config: AppConfig): AgentModules {
     testRunner,
     gitWorktree,
     toolRegistry,
+    llmRouter,
   };
 }
 
