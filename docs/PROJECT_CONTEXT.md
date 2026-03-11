@@ -149,6 +149,30 @@ src/
   - [x] Perplexity MCP → curl REST API — 1도구 절약
   - [x] Firebase MCP → firebase CLI — 크래시 제거
   - [x] CLI 전체 검증 완료 (9개 Obsidian 명령 + curl + firebase-tools)
+- [x] **Claude Code YOLO vs 뇽죵이 비교 분석** (2026-03-10 야간)
+  - [x] Agent Manager 백그라운드 실행 능력 vs Claude YOLO 정직한 비교
+  - [x] Antigravity 세션 한계(~1시간): 자기 연속 불가, 컨텍스트 소진
+  - [x] Cursor Automations(클라우드 기반, 3/5 출시) 발견 — 가장 앞선 예약 에이전트
+  - [x] Google 포럼 "Scheduled/Always-on Agents" Feature Request 3건 수집 (Google 무응답)
+- [x] **뇽죵이 설명서 v1.0** (Obsidian) (2026-03-10 야간)
+  - [x] 구버전(v0.8 슬래시 12개 중심) → v1.0 전면 재작성
+  - [x] 2-Track 모드, MCP 35개 도구 상세, 감사 프롬프트, 스킬 51개, 세션 관리 팁 추가
+- [x] **수정 워크플로우 복원 + 테스트 HARD GATE** (2026-03-10 야간)
+  - [x] `workflows/archived/수정.md` → `workflows/수정.md` 복원
+  - [x] 빌드(tsc)와 테스트(npm test)를 별도 HARD GATE로 분리 강제
+  - [x] 보고 양식에 빌드/테스트 별도 행 기재 의무화
+- [x] **뇽죵이 Agent 종합 감사 프롬프트 22개 테스트** 작성 완료
+- [x] **Antigravity v1.20.3 패치 분석** (2026-03-11)
+  - [x] AGENTS.md 규칙 읽기 지원 추가 (Cross-tool 표준)
+  - [x] Auto-continue 기본 활성화 (설정 불필요)
+  - [x] 토큰 회계 조기 한도 도달 버그 수정 (세션 길어질 수 있음)
+  - [x] NLM 노트북 `antigravity-docs` 생성 — 8개 소스 적재 완료
+- [x] **AGENTS.md 도입** (2026-03-11, 커밋 `2ded31f`)
+  - [x] Cross-tool 표준 규칙 파일 (Antigravity/Cursor/Claude Code 공용)
+  - [x] 빌드/테스트/코드 스타일/안전 규칙 정리
+- [x] **GEMINI.md 슬래시 커맨드 HARD GATE 추가** (2026-03-11)
+  - [x] `/` 입력 시 `view_file workflows/[커맨드].md` 첫 번째 도구 호출 강제
+  - [x] 기억 의존 절차 스킵 방지
 
 ## 🔧 ADR (Architecture Decision Records)
 
