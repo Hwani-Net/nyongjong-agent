@@ -32,7 +32,7 @@ export class DynamicPersonaGenerator {
   private ollama: OllamaClient;
   private openai: OpenAI | null = null;
   private ollamaModel: string;
-  private openaiModel: string = 'gpt-4o'; // 2026 standard
+  private openaiModel: string = 'gpt-4.1-mini'; // 2026 — upgraded from gpt-4o
 
   constructor(ollamaUrl?: string, model?: string) {
     this.ollama = new OllamaClient({

@@ -203,13 +203,13 @@ describe('LLMRouter', () => {
   // ─── Cost tracking ───────────────────────────────────────────────────────
 
   it('should accumulate total cost across calls', async () => {
-    await router.invoke(makeRequest({ provider: 'openai' }));         // $0.02
+    await router.invoke(makeRequest({ provider: 'openai' }));         // $0.005
     await router.invoke(makeRequest({ provider: 'deepseek-cloud' })); // $0.002
     await router.invoke(makeRequest({ provider: 'qwen3-local' }));    // $0
 
     const stats = router.getStats();
     expect(stats.totalCalls).toBe(3);
-    expect(stats.totalCostUsd).toBeCloseTo(0.022, 3);
+    expect(stats.totalCostUsd).toBeCloseTo(0.007, 3);
   });
 
   it('should track success rate correctly', async () => {

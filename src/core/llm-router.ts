@@ -1,5 +1,5 @@
 // LLM Router — unified multi-provider external LLM routing
-// Supports OpenAI (GPT-4o), Ollama Cloud (DeepSeek-V3.1:671b), Ollama Local (Qwen3:30b, Gemma3:27b)
+// Supports OpenAI (GPT-4.1-mini), Ollama Cloud (DeepSeek-V3.1:671b), Ollama Local (Qwen3:30b, Gemma3:27b)
 // Used by: external_review MCP tool (Council 5인 + 팀장 1~2인 통합)
 import OpenAI from 'openai';
 import { Ollama } from 'ollama';
@@ -122,8 +122,8 @@ const DEFAULT_PROVIDERS: LLMProvider[] = [
   {
     id: 'openai',
     type: 'openai',
-    model: 'gpt-4o',
-    costPerCall: 0.02,
+    model: 'gpt-4.1-mini',
+    costPerCall: 0.005,
   },
   {
     id: 'deepseek-cloud',
