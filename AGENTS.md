@@ -62,9 +62,44 @@ server.tool('tool_name', 'Description', { /* zod schema */ }, async (params) => 
 });
 ```
 
+## Mandatory Pre-Work (MUST read before starting)
+
+1. **Read `docs/PROJECT_CONTEXT.md`** — project status, architecture, current TODOs
+2. **Read `docs/PITFALLS.md`** — known traps and their solutions
+3. **Read `docs/DECISIONS.md`** — ADR history (why things are the way they are)
+
+> ⚠️ Skipping these files is the #1 cause of repeated failures across agents.
+
+## Deployment Rules
+
+- **Before ANY Firebase/deployment task**, read: `knowledge/nongjong-project-portfolio/artifacts/patterns/firebase-billing-and-apphosting-traps.md`
+- **Always run `firebase login:list`** to confirm which account is active
+- **Always run `firebase projects:list`** to cross-verify project IDs
+- **Check `apphosting.yaml`** project ID matches actual Firebase project
+
+## Research & Knowledge Rules
+
+- **Research/investigation tasks** MUST use NotebookLM (`nlm` CLI) to store fact-based sources
+- **Never write reports from AI memory alone** — all claims must reference sourced data
+- **`nlm source add <nb> --url "<URL>"`** for every URL discovered during research
+- **AI-generated summaries are NOT valid NLM sources** — only original URLs/documents
+
+## Port Management
+
+- Check `port-registry.json` before starting any dev server
+- Register your port, clean up old entries when changing ports
+
+## Cross-Session Continuity
+
+- Update `docs/PROJECT_CONTEXT.md` checkboxes when completing tasks
+- Record architectural/technical decisions in `docs/DECISIONS.md`
+- Log resolved pitfalls in `docs/PITFALLS.md` (cause + solution + prohibition)
+
 ## Known Pitfalls
 
 - **Windows bash**: Pipes (`|`) and shell variables can hang. Use `head -c` instead of `head -n` when needed.
 - **ESM imports**: Always use `.js` extension in import paths (TypeScript compiles `.ts` → `.js`)
 - **Obsidian REST API**: Requires `OBSIDIAN_API_KEY` env var and Obsidian running locally
 - **Ollama**: Optional dependency — gracefully handle when not running
+- **Firebase project ID**: `apphosting.yaml` may have stale project ID — always cross-verify with `firebase projects:list`
+- **Firebase auth**: Session expires — run `firebase login:list` first

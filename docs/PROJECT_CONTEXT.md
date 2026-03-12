@@ -125,6 +125,25 @@ src/
 - [x] `.agent/DECISIONS.md` ADR-015 추가
 - [x] 빌드 0 에러 + 테스트 445/445 통과
 
+### Phase: drift-guard 통합 + Auto-Validate Pipeline ✅ (2026-03-12~13)
+
+- [x] drift-guard CLI 설치 확인 (v0.2.4, 글로벌)
+- [x] 알고뽑자 V2 세션(6a669465) drift-guard 미발동 원인 분석 보고서 작성
+  - 원인: GEMINI.md에 규칙 부재 + 프로젝트 스냅샷 미생성 + 일반 모드 작업
+- [x] GEMINI.md 업데이트:
+  - 🛡️ Design Drift 방지 독립 섹션 신설 (모든 모드 공통)
+  - Pre-Flight #8: drift-guard init 추가
+  - ⚡ 일반 모드에 CSS/UI 예외 추가
+  - 기본 배포 플랫폼: Firebase 명시
+- [x] 뇽죵이 Agent 감사 실행: **등급 A** (20/21, 1건 eval YAML 설계 오류)
+- [x] **Auto-Validate Pipeline** (`src/workflow/validate.ts` 핵심 변경):
+  - Phase 2 자동 주입 체크: `npm outdated` (비차단 경고) + `drift-guard check` (>10% 차단)
+  - `ValidationResult.warnings` 필드 추가
+  - `skipAutoChecks` 옵션 (테스트용)
+  - `report.ts`에 📦 자동 점검 경고 섹션 추가
+- [x] 테스트 전부 수정: 445/445 통과 (1건 Ollama 타임아웃 = 기존 이슈)
+- [x] 빌드 0 에러
+
 ### TODO (미래)
 - [ ] npm Token 갱신 필요일: **2026-06-02** (Granular Token 90일 만료)
 - [ ] Dashboard Stitch 페이지에 라이브 데이터 연동 (실시간 포럼 모니터링)

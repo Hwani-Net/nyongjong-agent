@@ -202,7 +202,7 @@ export class CycleRunner {
           const failReport = generateReport({
             goal: input.goal,
             analysis: this.state.understanding.analysis,
-            validation: { passed: false, checks: [], issues: ['Gate 0 (Business Gate) FAIL — cycle aborted'], totalDurationMs: 0 },
+            validation: { passed: false, checks: [], issues: ['Gate 0 (Business Gate) FAIL — cycle aborted'], totalDurationMs: 0, warnings: [] },
             totalDurationMs: Date.now() - startTime,
             cycleIterations: 0,
           });

@@ -150,6 +150,14 @@ export function generateReport(input: ReportInput): Report {
     sections.push('');
   }
 
+  // Auto-injected warnings (npm outdated, drift-guard)
+  if (validation.warnings && validation.warnings.length > 0) {
+    sections.push('## 📦 자동 점검 경고');
+    validation.warnings.forEach((w) => sections.push(`- ${w}`));
+    sections.push('');
+  }
+
+
   // Evolution history (if retries occurred)
   if (evolutionHistory && evolutionHistory.length > 0) {
     sections.push('## 🔄 진화 이력');

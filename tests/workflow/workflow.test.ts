@@ -136,7 +136,7 @@ describe('Workflow: Prototype', () => {
 describe('Workflow: Evolve', () => {
   it('should not retry when validation passed', () => {
     const input: EvolveInput = {
-      validation: { passed: true, checks: [], issues: [], totalDurationMs: 100 },
+      validation: { passed: true, checks: [], issues: [], totalDurationMs: 100, warnings: [] },
       attempt: 1,
       maxAttempts: 3,
     };
@@ -157,6 +157,7 @@ describe('Workflow: Evolve', () => {
       }],
       issues: ['Test failed'],
       totalDurationMs: 500,
+      warnings: [],
     };
 
     const result = evolve({
@@ -171,7 +172,7 @@ describe('Workflow: Evolve', () => {
 
   it('should escalate to human after max attempts', () => {
     const result = evolve({
-      validation: { passed: false, checks: [], issues: ['error'], totalDurationMs: 100 },
+      validation: { passed: false, checks: [], issues: ['error'], totalDurationMs: 100, warnings: [] },
       attempt: 3,
       maxAttempts: 3,
     });
@@ -191,7 +192,7 @@ describe('Workflow: Report', () => {
         keyRequirements: ['새 기능 구현'],
         risks: [],
       },
-      validation: { passed: true, checks: [], issues: [], totalDurationMs: 1000 },
+      validation: { passed: true, checks: [], issues: [], totalDurationMs: 1000, warnings: [] },
       totalDurationMs: 5000,
       cycleIterations: 1,
     });
@@ -210,7 +211,7 @@ describe('Workflow: Report', () => {
         keyRequirements: ['버그 수정'],
         risks: ['높은 복잡도'],
       },
-      validation: { passed: false, checks: [], issues: ['테스트 실패'], totalDurationMs: 2000 },
+      validation: { passed: false, checks: [], issues: ['테스트 실패'], totalDurationMs: 2000, warnings: [] },
       evolutionHistory: [{
         shouldRetry: false,
         failureAnalysis: 'test error',

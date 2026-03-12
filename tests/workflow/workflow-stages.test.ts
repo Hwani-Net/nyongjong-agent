@@ -107,6 +107,7 @@ describe('Validate (Stage 3)', () => {
       projectRoot: '/tmp/test',
       commands: ['npm run typecheck', 'npm test'],
       runShell: mockShell,
+      skipAutoChecks: true,
     });
 
     expect(result.passed).toBe(true);
@@ -124,6 +125,7 @@ describe('Validate (Stage 3)', () => {
       projectRoot: '/tmp/test',
       commands: ['npm run typecheck', 'npm test'],
       runShell: mockShell,
+      skipAutoChecks: true,
     });
 
     expect(result.passed).toBe(false);
@@ -140,6 +142,7 @@ describe('Validate (Stage 3)', () => {
       projectRoot: '/tmp/test',
       commands: ['cmd1', 'cmd2', 'cmd3'],
       runShell: mockShell,
+      skipAutoChecks: true,
     });
 
     expect(result.totalDurationMs).toBe(900);
@@ -150,6 +153,7 @@ describe('Validate (Stage 3)', () => {
       projectRoot: '/tmp/test',
       commands: [],
       runShell: vi.fn(),
+      skipAutoChecks: true,
     });
 
     expect(result.passed).toBe(true);
@@ -164,6 +168,7 @@ describe('Evolve (Stage 4)', () => {
     checks: [{ name: 'npm test', command: 'npm test', passed: true, output: 'OK', durationMs: 100 }],
     issues: [],
     totalDurationMs: 100,
+    warnings: [],
   };
 
   const failedValidation: ValidationResult = {
@@ -173,6 +178,7 @@ describe('Evolve (Stage 4)', () => {
     ],
     issues: ['npm test failed (exit code 1)'],
     totalDurationMs: 100,
+    warnings: [],
   };
 
   it('should not retry when validation passed', () => {
@@ -196,6 +202,7 @@ describe('Evolve (Stage 4)', () => {
       checks: [{ name: 'build', command: 'npm run build', passed: false, output: 'Cannot find module foo', durationMs: 50 }],
       issues: ['build failed'],
       totalDurationMs: 50,
+      warnings: [],
     };
 
     const result = evolve({ validation: missingModuleValidation, attempt: 1, maxAttempts: 3 });
@@ -215,6 +222,7 @@ describe('Evolve (Stage 4)', () => {
       checks: [{ name: 'build', command: 'build', passed: false, output: 'ENOSPC: no space left', durationMs: 50 }],
       issues: ['build failed'],
       totalDurationMs: 50,
+      warnings: [],
     };
 
     const result = evolve({ validation: envValidation, attempt: 1, maxAttempts: 3 });
@@ -227,6 +235,7 @@ describe('Evolve (Stage 4)', () => {
       checks: [{ name: 'lint', command: 'lint', passed: false, output: 'unknown error xyz', durationMs: 50 }],
       issues: ['lint failed'],
       totalDurationMs: 50,
+      warnings: [],
     };
 
     const result = evolve({ validation: unknownValidation, attempt: 1, maxAttempts: 3 });
@@ -245,6 +254,7 @@ describe('Report (Stage 5)', () => {
         checks: [{ name: 'npm test', command: 'npm test', passed: true, output: 'OK', durationMs: 500 }],
         issues: [],
         totalDurationMs: 500,
+        warnings: [],
       },
       totalDurationMs: 3000,
       cycleIterations: 1,
@@ -266,6 +276,7 @@ describe('Report (Stage 5)', () => {
         checks: [{ name: 'npm test', command: 'npm test', passed: false, output: 'Error', durationMs: 200 }],
         issues: ['npm test failed'],
         totalDurationMs: 200,
+        warnings: [],
       },
       evolutionHistory: [{ shouldRetry: false, failureAnalysis: 'all failed', fixes: [], escalateToHuman: true, notes: 'All attempts exhausted' }],
       totalDurationMs: 60000,
@@ -283,7 +294,7 @@ describe('Report (Stage 5)', () => {
     const report = generateReport({
       goal: 'Test persona section',
       analysis: { taskType: 'implementation', complexity: 'medium', keyRequirements: [], risks: [] },
-      validation: { passed: true, checks: [], issues: [], totalDurationMs: 100 },
+      validation: { passed: true, checks: [], issues: [], totalDurationMs: 100, warnings: [] },
       personaResults: [{ persona: 'CEO', response: 'Focus on revenue', durationMs: 1000, model: 'gemma3:4b', success: true }],
       totalDurationMs: 5000,
       cycleIterations: 1,
@@ -305,7 +316,7 @@ describe('Report (Stage 5)', () => {
       const report = generateReport({
         goal: 'Test',
         analysis: { taskType: 'implementation', complexity, keyRequirements: [], risks: [] },
-        validation: { passed: true, checks: [], issues: [], totalDurationMs: 100 },
+        validation: { passed: true, checks: [], issues: [], totalDurationMs: 100, warnings: [] },
         totalDurationMs: 100,
         cycleIterations: 1,
       });
@@ -316,14 +327,14 @@ describe('Report (Stage 5)', () => {
   it('should format duration correctly', () => {
     const report1 = generateReport({
       goal: 'Test', analysis: { taskType: 'simple', complexity: 'low', keyRequirements: [], risks: [] },
-      validation: { passed: true, checks: [], issues: [], totalDurationMs: 0 },
+      validation: { passed: true, checks: [], issues: [], totalDurationMs: 0, warnings: [] },
       totalDurationMs: 500, cycleIterations: 1,
     });
     expect(report1.markdown).toContain('500ms');
 
     const report2 = generateReport({
       goal: 'Test', analysis: { taskType: 'simple', complexity: 'low', keyRequirements: [], risks: [] },
-      validation: { passed: true, checks: [], issues: [], totalDurationMs: 0 },
+      validation: { passed: true, checks: [], issues: [], totalDurationMs: 0, warnings: [] },
       totalDurationMs: 65000, cycleIterations: 1,
     });
     expect(report2.markdown).toContain('1.1min');
