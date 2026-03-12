@@ -8,7 +8,7 @@
 | 항목 | 값 |
 |------|-----|
 | **이름** | `nyongjong-agent` |
-| **버전** | `0.7.7` |
+| **버전** | `0.7.8` |
 | **경로** | `E:\Agent\뇽죵이Agent` |
 | **런타임** | Node.js ≥22, TypeScript, ESM |
 | **테스트** | vitest — **445/445 pass** (30 파일) |
@@ -143,6 +143,7 @@ src/
   - `report.ts`에 📦 자동 점검 경고 섹션 추가
 - [x] 테스트 전부 수정: 445/445 통과 (1건 Ollama 타임아웃 = 기존 이슈)
 - [x] 빌드 0 에러
+- [x] npm publish v0.7.8 ✅ (auto-validate pipeline + eval YAML scan_evals fix)
 
 ### TODO (미래)
 - [ ] npm Token 갱신 필요일: **2026-06-02** (Granular Token 90일 만료)
