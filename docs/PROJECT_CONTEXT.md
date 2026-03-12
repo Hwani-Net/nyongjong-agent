@@ -114,6 +114,17 @@ src/
 - [x] 에이전트 감사 실행: **22/22 S등급**
 - [x] 프로젝트 감사 실행: **3/3 S등급** (pentagonal 93/100, 445/445 tests)
 
+### Phase: drift-guard 통합 분석 + 세션 핸드오프 개선 ✅ (2026-03-12)
+
+- [x] drift-guard CLI 뇽죵이Agent 통합 분석: MCP 코드 변경 0건, 워크플로우/스킬/CI 수준 통합
+- [x] drift-guard 개선 로드맵 7가지 (P-1~P-7) + MCP 의존도 저감 전략
+- [x] `/저장` Enhanced Handoff: 5줄 세션 요약 + ADR 체인 + 핵심 PITFALL + Phase (ADR-015)
+- [x] `/이어서` Smart Recovery 3계층: L1(항상 읽기) + L2(Smart) + Full Legacy fallback
+- [x] Council 5인 검토 (4/5 동의) → PITFALLS 항상 읽기 확정
+- [x] 팀장 검수 PASS → ADR 파싱 fallback + Obsidian 조건 명확화 반영
+- [x] `.agent/DECISIONS.md` ADR-015 추가
+- [x] 빌드 0 에러 + 테스트 445/445 통과
+
 ### TODO (미래)
 - [ ] npm Token 갱신 필요일: **2026-06-02** (Granular Token 90일 만료)
 - [ ] Dashboard Stitch 페이지에 라이브 데이터 연동 (실시간 포럼 모니터링)
